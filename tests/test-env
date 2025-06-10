@@ -1,0 +1,8 @@
+# Copy to repo root as .env for testing or modification for using
+INPUT_PATH=./tests/test-input
+OUTPUT_PATH=./tests/test-output
+CONFIG_PATH=./config
+LOG_LEVEL=debug
+TRACKING_MODE=JSON
+INCLUDE_EXTRAS=true
+DUPLICATE_POLICY=versioned
