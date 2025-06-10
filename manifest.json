@@ -1,0 +1,31 @@
+{
+  "project": "audiobookshelf-tools",
+  "version": "0.1.0",
+  "modules": {
+    "organize_audiobooks.sh": "CLI scaffold complete",
+    "lib/config.sh": "not started",
+    "lib/logging.sh": "next priority",
+    "lib/metadata.sh": "planned",
+    "lib/tagging.sh": "planned",
+    "lib/lookup.sh": "planned",
+    "lib/filesystem.sh": "planned"
+  },
+  "test_framework": {
+    "generate_test_audiobooks.sh": "provided by user",
+    "run_all_tests.sh": "stub created"
+  },
+  "decisions": {
+    "language_policy": "Bash-first; Perl OK; Python only if no good Bash alternative",
+    "execution_modes": ["Docker", "Local CLI"],
+    "humor_policy": "README.md should occasionally amuse"
+  },
+  "ai_guidelines": {
+    "ask_questions_one_by_one": true,
+    "preserve_script_versions": true,
+    "do_not_output_full_scripts_until_requested": true
+  },
+  "recovery": {
+    "last_known_good_version": "v0.1.0",
+    "important_context": "Bash-focused Audiobookshelf organizer project with test automation and container support."
+  }
+}
