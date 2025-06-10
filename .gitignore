@@ -1,0 +1,164 @@
+#----------------------------------------
+# General OS and Editor Junk
+#----------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+._*
+
+#----------------------------------------
+# macOS-specific
+#----------------------------------------
+*.swp
+*.swo
+.SymAV*
+.fseventsd
+.metadata_never_index
+.VolumeIcon.icns
+
+#----------------------------------------
+# Linux-specific
+#----------------------------------------
+*~
+.nfs*
+
+#----------------------------------------
+# Synology and Unraid Specific
+#----------------------------------------
+@eaDir/
+*.dmt
+*.@*
+*.cfg
+*.bak
+*.sh.bak
+
+#----------------------------------------
+# Python
+#----------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+venv/
+ENV/
+env/
+.venv/
+.pytest_cache/
+.cache/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.coverage
+.tox/
+htmlcov/
+site/
+.mr.developer.cfg
+.idea/
+.vscode/
+
+#----------------------------------------
+# Bash
+#----------------------------------------
+*.log
+*.out
+*.bak
+*.tmp
+*.swp
+
+#----------------------------------------
+# Perl
+#----------------------------------------
+*.pm.tdy
+*.t
+*.bs
+*.packlist
+blib/
+Makefile.old
+Build/
+Build.bat
+*.old
+*.tar.gz
+MYMETA.*
+
+#----------------------------------------
+# Docker
+#----------------------------------------
+.dockerignore
+Dockerfile.*
+docker-compose.*
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose*.yml
+docker-compose*.yaml
+
+# Docker artifacts
+*.pid
+*.pid.lock
+docker-volumes/
+docker-data/
+logs/
+*.log
+
+# Docker secrets
+secrets/
+*.crt
+*.key
+*.pem
+
+#----------------------------------------
+# Git Metadata (DO NOT IGNORE CONTROL FILES)
+#----------------------------------------
+.git/  # Git internal metadata (never commit)
+# Do NOT ignore these:
+#!.gitignore
+#!.gitattributes
+#!.gitmodules
+
+#----------------------------------------
+# Temp files and backups
+#----------------------------------------
+*.tmp
+*.bak
+*.swp
+*.swo
+*.swn
+*.orig
+*~
+
+#----------------------------------------
+# Misc: OS-specific or generated
+#----------------------------------------
+nohup.out
+core
+*.core
+*.dump
+*.pid
+*.seed
+*.pid.lock
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+
+#----------------------------------------
+# Custom Local Configs (opt-in)
+#----------------------------------------
+config.local
+.env
+.env.*
+.localenv
+*.secrets
