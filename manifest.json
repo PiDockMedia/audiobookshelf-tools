@@ -1,23 +1,27 @@
 {
   "project": "audiobookshelf-tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "modules": {
-    "organize_audiobooks.sh": "CLI scaffold complete",
-    "lib/config.sh": "not started",
-    "lib/logging.sh": "next priority",
-    "lib/metadata.sh": "planned",
-    "lib/tagging.sh": "planned",
-    "lib/lookup.sh": "planned",
-    "lib/filesystem.sh": "planned"
+    "organize_audiobooks.sh": "Initial full processing loop completed",
+    "lib/config.sh": "Handles .env, ENV, and mode-based defaults",
+    "lib/logging.sh": "Supports container/stdout, CLI, and test log file modes",
+    "lib/tracking.sh": "JSON-based tracking with hybrid hash+metadata ID",
+    "lib/metadata.sh": "Extracts metadata from folder name and sidecar files",
+    "lib/filesystem.sh": "Copy/move logic with extras filtering and duplicate policy",
+    "lib/lookup.sh": "Not started"
   },
   "test_framework": {
-    "generate_test_audiobooks.sh": "provided by user",
-    "run_all_tests.sh": "stub created"
+    "generate_test_audiobooks.sh": "User-provided and editable",
+    "run_all_tests.sh": "Logs to ./tests/logs/ with timestamped files"
   },
   "decisions": {
     "language_policy": "Bash-first; Perl OK; Python only if no good Bash alternative",
     "execution_modes": ["Docker", "Local CLI"],
-    "humor_policy": "README.md should occasionally amuse"
+    "logging_policy": "LOG_LEVEL-aware with terminal color or file output",
+    "duplicate_policy": "Versioned folders by default (max 5); configurable",
+    "failure_handling": "Move failed folders to /Unorganized and log reason",
+    "tracking_policy": "Default JSON; env override to SQLITE/NONE/MOVE",
+    "extras_handling": "Copy non-audio files by default; configurable"
   },
   "ai_guidelines": {
     "ask_questions_one_by_one": true,
@@ -25,7 +29,7 @@
     "do_not_output_full_scripts_until_requested": true
   },
   "recovery": {
-    "last_known_good_version": "v0.1.0",
-    "important_context": "Bash-focused Audiobookshelf organizer project with test automation and container support."
+    "last_known_good_version": "v0.2.0",
+    "important_context": "Daemonized, container-first audiobook organizer; default is safe, verbose, and non-destructive"
   }
 }
