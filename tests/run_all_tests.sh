@@ -10,6 +10,10 @@ mkdir -p "${LOG_DIR}"
 LOG_FILE="${LOG_DIR}/test_run_2025-06-11_0008.log"
 echo "[INFO] Test run started at $(date)" | tee "${LOG_FILE}"
 
+# === Set .sh permissions ===
+echo "[INFO] Ensuring all .sh scripts are readable..." | tee -a "${LOG_FILE}"
+find "${ROOT_DIR}" -type f -name "*.sh" -exec chmod 644 {} +
+
 # === Load test-env ===
 ENV_FILE="${TEST_DIR}/test-env"
 if [[ -f "${ENV_FILE}" ]]; then
