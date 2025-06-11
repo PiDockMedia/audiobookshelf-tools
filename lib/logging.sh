@@ -1,8 +1,25 @@
 #!/usr/bin/env bash
-# logging.sh — Provides structured logging and DebugEcho support
+# logging.sh — Handles log output and debug echoing
 
-# shellcheck source=lib/debugecho.sh
-source "${REPO_ROOT}/lib/debugecho.sh"
+# === Determine REPO_ROOT if not already set ===
+if [[ -z "${REPO_ROOT:-}" ]]; then
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+# === Import DebugEcho if available ===
+if [[ -f "${REPO_ROOT}/lib/debugecho.sh" ]]; then
+  source "${REPO_ROOT}/lib/debugecho.sh"
+fi
+
+# === Default LOG_LEVEL ===
+LOG_LEVEL="${LOG_LEVEL:-info}"
+
+log() {
+  local level="$1"
+  shift
+  local msg="$*"
+  printf "[%s] %s\n" "${level^^}" "${msg}"
+}
 
 DebugEcho 📥 BEGIN logging.sh
 
