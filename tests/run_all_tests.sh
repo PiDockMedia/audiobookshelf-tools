@@ -32,17 +32,18 @@ else
   exit 1
 fi
 
-# === Source the lib/config.sh Configs ===
-
+# === Load config.sh ===
+DebugEcho "📥 BEGIN loading config.sh"
 source "${ROOT_DIR}/lib/config.sh"
+DebugEcho "📤 END loading config.sh"
 
 # === Show ENV values ===
-echo "[DEBUG] INPUT_PATH=${INPUT_PATH:-unset}" | tee -a "${LOG_FILE}"
-echo "[DEBUG] OUTPUT_PATH=${OUTPUT_PATH:-unset}" | tee -a "${LOG_FILE}"
-echo "[DEBUG] CONFIG_PATH=${CONFIG_PATH:-unset}" | tee -a "${LOG_FILE}"
-echo "[DEBUG] TRACKING_MODE=${TRACKING_MODE:-unset}" | tee -a "${LOG_FILE}"
-echo "[DEBUG] DUPLICATE_POLICY=${DUPLICATE_POLICY:-unset}" | tee -a "${LOG_FILE}"
-echo "[DEBUG] INCLUDE_EXTRAS=${INCLUDE_EXTRAS:-unset}" | tee -a "${LOG_FILE}"
+DebugEcho "📦 INPUT_PATH=${INPUT_PATH:-unset}"
+DebugEcho "📦 OUTPUT_PATH=${OUTPUT_PATH:-unset}"
+DebugEcho "📦 CONFIG_PATH=${CONFIG_PATH:-unset}"
+DebugEcho "📦 TRACKING_MODE=${TRACKING_MODE:-unset}"
+DebugEcho "📦 DUPLICATE_POLICY=${DUPLICATE_POLICY:-unset}"
+DebugEcho "📦 INCLUDE_EXTRAS=${INCLUDE_EXTRAS:-unset}"
 
 # === Run Test Data Generator ===
 DebugEcho "Step 1: Generating test audiobook files..."
