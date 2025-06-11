@@ -20,7 +20,7 @@ extract_from_folder_name() {
     title="${folder_name}"
   fi
 
-  echo "{"author": "${author}", "title": "${title}"}"
+  echo "{{\"author\": \"${author}\", \"title\": \"${title}\"}}"
 }
 
 # === Extract from metadata.json if exists ===
@@ -29,7 +29,7 @@ extract_from_metadata_json() {
   local file="${folder}/metadata.json"
   [[ ! -f "${file}" ]] && return 1
 
-  jq '{author, title, series, series_index, narrator}' "${file}" 2>/dev/null || return 1
+  jq '{{author, title, series, series_index, narrator}}' "${file}" 2>/dev/null || return 1
 }
 
 # === Extract from sidecar text files ===
@@ -47,7 +47,7 @@ extract_from_sidecar_texts() {
   [[ -f "${title_file}" ]] && title="$(<"${title_file}")"
   [[ -f "${narrator_file}" ]] && narrator="$(<"${narrator_file}")"
 
-  echo "{"author": "${author}", "title": "${title}", "narrator": "${narrator}"}"
+  echo "{{\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"${narrator}\"}}"
 }
 
 # === Best effort metadata resolver ===
@@ -58,11 +58,28 @@ resolve_metadata() {
 
   local meta=""
 
-  meta="$(extract_from_metadata_json "$folder")" && echo "${meta}" && return 0
-  meta="$(extract_from_sidecar_texts "$folder")" && echo "${meta}" && return 0
-  meta="$(extract_from_folder_name "${folder_name}")" && echo "${meta}" && return 0
+  meta="$(extract_from_metadata_json "$folder")"
+  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
+    log_debug "Metadata extracted from metadata.json"
+    echo "${meta}"
+    return 0
+  fi
 
+  meta="$(extract_from_sidecar_texts "$folder")"
+  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
+    log_debug "Metadata extracted from sidecar text files"
+    echo "${meta}"
+    return 0
+  fi
+
+  meta="$(extract_from_folder_name "${folder_name}")"
+  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
+    log_debug "Metadata parsed from folder name"
+    echo "${meta}"
+    return 0
+  fi
+
+  log_error "Failed to resolve metadata for folder: ${folder}"
   return 1
 }
-
 ###EOF
