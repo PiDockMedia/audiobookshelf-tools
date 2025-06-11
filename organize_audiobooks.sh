@@ -31,10 +31,11 @@ find "${INPUT_PATH}" -mindepth 1 -maxdepth 1 -type d | while read -r folder; do
     continue
   fi
 
-  metadata_json=$(resolve_metadata "${folder}") || {
+  metadata_json="$(resolve_metadata "${folder}")"
+  if [[ -z "${metadata_json}" || "${metadata_json}" == "null" ]]; then
     quarantine_failed_folder "${folder}" "Unable to extract metadata"
     continue
-  }
+  fi
 
   author=$(echo "${metadata_json}" | jq -r '.author // empty')
   title=$(echo "${metadata_json}" | jq -r '.title // empty')
