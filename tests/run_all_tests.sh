@@ -32,6 +32,10 @@ else
   exit 1
 fi
 
+# === Source the lib/config.sh Configs ===
+
+source "${ROOT_DIR}/lib/config.sh"
+
 # === Show ENV values ===
 echo "[DEBUG] INPUT_PATH=${INPUT_PATH:-unset}" | tee -a "${LOG_FILE}"
 echo "[DEBUG] OUTPUT_PATH=${OUTPUT_PATH:-unset}" | tee -a "${LOG_FILE}"
