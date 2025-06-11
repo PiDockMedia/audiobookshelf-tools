@@ -1,4 +1,6 @@
 # lib/config.sh - Loads environment variables and sets defaults
+# shellcheck source=lib/debugecho.sh
+source "${REPO_ROOT}/lib/debugecho.sh"
 DebugEcho "📥 BEGIN loading config.sh"
 
 [[ -n "${_CONFIG_SH_LOADED:-}" ]] && return
