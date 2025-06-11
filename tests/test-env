@@ -1,7 +1,7 @@
 # Copy to repo root as .env for testing or modification for using
-INPUT_PATH=./tests/test-input
-OUTPUT_PATH=./tests/test-output
-CONFIG_PATH=./config
+INPUT_PATH=./tests/test-audiobooks/input
+OUTPUT_PATH=./tests/test-audiobooks/output
+CONFIG_PATH=./tests/test-audiobooks/config
 LOG_LEVEL=debug
 TRACKING_MODE=JSON
 INCLUDE_EXTRAS=true
