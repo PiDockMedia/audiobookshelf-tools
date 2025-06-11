@@ -1,82 +1,71 @@
-#!/usr/bin/env bash
-# lib/tracking.sh - Handles audiobook tracking via JSON or SQLite
+# === tracking.sh ===
+# Track processed audiobook folders using JSON or SQLite
+# Called from organize_audiobooks.sh
+# Requires: CONFIG_PATH, TRACKING_MODE, TRACKING_DB_PATH
+# Depends on: lib/logging.sh
 
-[[ -n "${_TRACKING_SH_LOADED:-}" ]] && return
-readonly _TRACKING_SH_LOADED=1
+DebugEcho "📦 Entering tracking.sh"
 
-source "${LIB_DIR}/logging.sh"
-
-TRACKING_MODE="${TRACKING_MODE:-JSON}"
-TRACKING_DB_PATH="${TRACKING_DB_PATH:-}"
-
-# === Set default DB path based on mode ===
-set_tracking_db_path() {
-  if [[ -n "${TRACKING_DB_PATH}" ]]; then
-    return 0
-  fi
-
-  if [[ "${IS_CONTAINER}" == "true" ]]; then
-    TRACKING_DB_PATH="/config/processed.json"
-  else
-    TRACKING_DB_PATH="${INPUT_PATH}/processed.json"
-  fi
+# Load default tracking DB path
+function init_tracking_db() {
+  DebugEcho "→ init_tracking_db called"
+  case "${TRACKING_MODE}" in
+    "JSON")
+      TRACKING_DB_PATH="${TRACKING_DB_PATH:-${CONFIG_PATH}/tracking.json}"
+      mkdir -p "$(dirname "${TRACKING_DB_PATH}")"
+      [[ ! -f "${TRACKING_DB_PATH}" ]] && echo "{}" > "${TRACKING_DB_PATH}"
+      DebugEcho "✅ Initialized JSON tracking DB at: ${TRACKING_DB_PATH}"
+      ;;
+    "SQLITE")
+      TRACKING_DB_PATH="${TRACKING_DB_PATH:-${CONFIG_PATH}/tracking.sqlite}"
+      mkdir -p "$(dirname "${TRACKING_DB_PATH}")"
+      if [[ ! -f "${TRACKING_DB_PATH}" ]]; then
+        sqlite3 "${TRACKING_DB_PATH}" "CREATE TABLE IF NOT EXISTS processed (path TEXT PRIMARY KEY, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);"
+        DebugEcho "✅ Created SQLite tracking DB schema"
+      fi
+      DebugEcho "✅ Initialized SQLite tracking DB at: ${TRACKING_DB_PATH}"
+      ;;
+    "MOVE"|"NONE")
+      DebugEcho "⚠️ No tracking required for mode: ${TRACKING_MODE}"
+      ;;
+    *)
+      printf "[FATAL] Unknown TRACKING_MODE: %s\n" "${TRACKING_MODE}" >&2
+      exit 1
+      ;;
+  esac
 }
 
-# === Generate unique ID from structure + metadata ===
-get_tracking_id() {
+function has_been_processed() {
   local folder="$1"
-  local metadata_fingerprint="$2"  # Optional: author+title
-
-  # Collect file names and sizes
-  local structure_hash
-  structure_hash=$(find "$folder" -type f -exec stat -c '%n:%s' {} + | sort | sha256sum | cut -d ' ' -f1)
-
-  if [[ -n "$metadata_fingerprint" ]]; then
-    echo "${structure_hash}::${metadata_fingerprint}"
-  else
-    echo "${structure_hash}"
-  fi
+  DebugEcho "🔎 Checking if already processed: ${folder}"
+  case "${TRACKING_MODE}" in
+    "JSON")
+      jq -e --arg f "$folder" '.[$f]?' "${TRACKING_DB_PATH}" >/dev/null 2>&1 && return 0 || return 1
+      ;;
+    "SQLITE")
+      sqlite3 "${TRACKING_DB_PATH}" "SELECT 1 FROM processed WHERE path = '$folder' LIMIT 1;" | grep -q 1
+      ;;
+    "MOVE"|"NONE")
+      return 1
+      ;;
+  esac
 }
 
-# === Check if already processed (JSON only for now) ===
-tracking_exists() {
-  local id="$1"
-  [[ ! -f "${TRACKING_DB_PATH}" ]] && return 1
-  grep -q "\"id\":\s*\"${id}\"" "${TRACKING_DB_PATH}" && return 0 || return 1
+function mark_as_processed() {
+  local folder="$1"
+  DebugEcho "📝 Marking as processed: ${folder}"
+  case "${TRACKING_MODE}" in
+    "JSON")
+      tmpfile=$(mktemp)
+      jq --arg f "$folder" '. + {($f): (now | todate)}' "${TRACKING_DB_PATH}" > "${tmpfile}" && mv "${tmpfile}" "${TRACKING_DB_PATH}"
+      ;;
+    "SQLITE")
+      sqlite3 "${TRACKING_DB_PATH}" "INSERT OR IGNORE INTO processed (path) VALUES ('$folder');"
+      ;;
+    "MOVE"|"NONE")
+      # No action needed
+      ;;
+  esac
 }
 
-# === Mark item as processed ===
-mark_as_processed() {
-  local id="$1"
-  local path="$2"
-  local meta="$3"
-  local timestamp
-  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-  local entry
-  entry=$(cat <<EOF
-{
-  "id": "${id}",
-  "source_path": "${path}",
-  "processed_at": "${timestamp}",
-  "metadata": ${meta}
-}
-EOF
-)
-
-  if [[ ! -f "${TRACKING_DB_PATH}" ]]; then
-    echo "[${entry}]" > "${TRACKING_DB_PATH}"
-  else
-    tmp_file="$(mktemp)"
-    jq ". += [${entry}]" "${TRACKING_DB_PATH}" > "${tmp_file}" && mv "${tmp_file}" "${TRACKING_DB_PATH}"
-  fi
-}
-
-# === Prune entries for missing source paths ===
-prune_stale_entries() {
-  [[ ! -f "${TRACKING_DB_PATH}" ]] && return 0
-  tmp_file="$(mktemp)"
-  jq '[.[] | select(.source_path | test("^/") and (inputs | index(.))) ]' "${TRACKING_DB_PATH}" <(find "${INPUT_PATH}" -type f) > "${tmp_file}"     && mv "${tmp_file}" "${TRACKING_DB_PATH}"
-}
-
-###EOF
+DebugEcho "✅ Finished loading tracking.sh"

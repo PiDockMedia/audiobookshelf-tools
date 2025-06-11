@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # lib/metadata.sh - Extracts basic metadata from folder names and sidecar files
+DebugEcho "📥 BEGIN loading metadata.sh"
 
 [[ -n "${_METADATA_SH_LOADED:-}" ]] && return
 readonly _METADATA_SH_LOADED=1
@@ -52,6 +53,7 @@ extract_from_sidecar_texts() {
 
 # === Best effort metadata resolver ===
 resolve_metadata() {
+  DebugEcho "🔍 resolve_metadata() called with folder: $folder"
   local folder="$1"
   local folder_name
   folder_name="$(basename "$folder")"
@@ -61,25 +63,30 @@ resolve_metadata() {
   meta="$(extract_from_metadata_json "$folder")"
   if [[ -n "${meta}" && "${meta}" != "null" ]]; then
     log_debug "Metadata extracted from metadata.json"
+    DebugEcho "✅ Metadata resolved from .json: ${meta}"
     echo "${meta}"
     return 0
   fi
-
+  
   meta="$(extract_from_sidecar_texts "$folder")"
   if [[ -n "${meta}" && "${meta}" != "null" ]]; then
     log_debug "Metadata extracted from sidecar text files"
+    DebugEcho "📎 Metadata resolved from sidecar files: ${meta}"
     echo "${meta}"
     return 0
   fi
-
+  
   meta="$(extract_from_folder_name "${folder_name}")"
   if [[ -n "${meta}" && "${meta}" != "null" ]]; then
     log_debug "Metadata parsed from folder name"
+    DebugEcho "🏷️ Metadata parsed from folder name: ${meta}"
     echo "${meta}"
-    return 0
-  fi
+  return 0
+fi
 
   log_error "Failed to resolve metadata for folder: ${folder}"
   return 1
 }
+DebugEcho "📤 END loading metadata.sh"
+###EOF
 ###EOF

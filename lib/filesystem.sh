@@ -1,100 +1,49 @@
-#!/usr/bin/env bash
-# lib/filesystem.sh - Handles filesystem operations for organizing audiobooks
+# === filesystem.sh ===
+# Safe file movement and folder creation
+# Depends on: lib/logging.sh
 
-[[ -n "${_FILESYSTEM_SH_LOADED:-}" ]] && return
-readonly _FILESYSTEM_SH_LOADED=1
+DebugEcho "📁 Entering filesystem.sh"
 
-source "${LIB_DIR}/logging.sh"
-source "${LIB_DIR}/config.sh"
-
-SUPPORTED_AUDIO_EXTENSIONS=(.m4b .mp3 .flac .ogg .m4a .wav)
-
-# === Helpers ===
-
-is_audio_file() {
-  local file="$1"
-  for ext in "${SUPPORTED_AUDIO_EXTENSIONS[@]}"; do
-    [[ "${file,,}" == *"${ext}" ]] && return 0
-  done
-  return 1
-}
-
-should_include_file() {
-  local file="$1"
-  is_audio_file "${file}" && return 0
-  [[ "${INCLUDE_EXTRAS:-true}" == "true" ]] && [[ ! "$(basename "${file}")" =~ ^\..* ]] && return 0
-  return 1
-}
-
-# === Ensure Unique Target Directory (based on DUPLICATE_POLICY) ===
-
-resolve_target_dir() {
-  local base="$1"
-  local attempt=0
-  local max_attempts=5
-  local newdir="${base}"
-
-  while [[ -e "${newdir}" && "${DUPLICATE_POLICY:-versioned}" == "versioned" && $attempt -lt $max_attempts ]]; do
-    attempt=$((attempt + 1))
-    newdir="${base} - copy ${attempt}"
-  done
-
-  if [[ -e "${newdir}" ]]; then
-    case "${DUPLICATE_POLICY:-versioned}" in
-      skip)
-        log_warn "Skipping duplicate: ${newdir}"
-        return 1
-        ;;
-      overwrite)
-        log_warn "Overwriting existing: ${newdir}"
-        ;;
-      *)
-        log_error "Too many duplicates for: ${base}"
-        return 2
-        ;;
-    esac
+function ensure_directory_exists() {
+  local dir="$1"
+  DebugEcho "→ ensure_directory_exists called with: ${dir}"
+  if [[ ! -d "${dir}" ]]; then
+    DebugEcho "📂 Creating directory: ${dir}"
+    mkdir -p "${dir}"
   fi
-
-  echo "${newdir}"
-  return 0
+  DebugEcho "✅ Directory ensured: ${dir}"
 }
 
-# === Move or Copy Folder ===
-
-process_folder_copy_or_move() {
+function safe_copy_folder() {
   local src="$1"
   local dest="$2"
-  local move="${3:-false}"
-
-  local target
-  target="$(resolve_target_dir "${dest}")" || return 1
-
-  mkdir -p "${target}"
-  find "${src}" -type f | while read -r file; do
-    if should_include_file "${file}"; then
-      dest_path="${target}/$(basename "${file}")"
-      if [[ "${move}" == "true" ]]; then
-        mv -n "${file}" "${dest_path}"
-      else
-        cp -n "${file}" "${dest_path}"
-      fi
-    fi
-  done
-
-  log_info "✓ ${move^^} from '${src}' to '${target}'"
+  DebugEcho "→ safe_copy_folder from ${src} to ${dest}"
+  ensure_directory_exists "$(dirname "${dest}")"
+  cp -a "${src}" "${dest}"
+  DebugEcho "✅ Finished copying ${src} to ${dest}"
 }
 
-# === Move Folder to /Unorganized ===
-
-quarantine_failed_folder() {
+function safe_move_folder() {
   local src="$1"
-  local reason="$2"
-  local unorganized="${OUTPUT_PATH}/Unorganized"
-  local target="${unorganized}/$(basename "${src}")"
-
-  mkdir -p "${unorganized}"
-  mv -n "${src}" "${target}"
-  log_error "Moved to Unorganized: '${src}' → '${target}' — Reason: ${reason}"
+  local dest="$2"
+  DebugEcho "→ safe_move_folder from ${src} to ${dest}"
+  ensure_directory_exists "$(dirname "${dest}")"
+  mv "${src}" "${dest}"
+  DebugEcho "✅ Finished moving ${src} to ${dest}"
 }
 
-###EOF
+function generate_safe_output_path() {
+  local base="$1"
+  local attempt=0
+  local newpath="${base}"
+  DebugEcho "→ generate_safe_output_path base: ${base}"
+  while [[ -e "${newpath}" && ${attempt} -lt 5 ]]; do
+    attempt=$((attempt + 1))
+    newpath="${base} - copy ${attempt}"
+    DebugEcho "⚠️ Attempting newpath due to conflict: ${newpath}"
+  done
+  echo "${newpath}"
+  DebugEcho "✅ Output path resolved: ${newpath}"
+}
+
+DebugEcho "✅ Finished loading filesystem.sh"

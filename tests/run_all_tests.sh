@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+#  === Load logging for DebugEcho support ===
+source "$(dirname "$0")/../lib/logging.sh"
+
+export LOG_LEVEL=debug
+DebugEcho ">>> BEGIN run_all_tests.sh"
+
 # === Test Runner for audiobookshelf-tools ===
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${TEST_DIR}/.." && pwd)"
@@ -35,16 +41,19 @@ echo "[DEBUG] DUPLICATE_POLICY=${DUPLICATE_POLICY:-unset}" | tee -a "${LOG_FILE}
 echo "[DEBUG] INCLUDE_EXTRAS=${INCLUDE_EXTRAS:-unset}" | tee -a "${LOG_FILE}"
 
 # === Run Test Data Generator ===
-echo "[INFO] Step 1: Generating test audiobook files..." | tee -a "${LOG_FILE}"
+DebugEcho "Step 1: Generating test audiobook files..."
 bash "${TEST_DIR}/generate_test_audiobooks.sh" | tee -a "${LOG_FILE}"
+DebugEcho "✅ Finished generating test data"
 
 # === Confirm output structure ===
 echo "[INFO] Contents of INPUT_PATH (${INPUT_PATH}):" | tee -a "${LOG_FILE}"
 find "${INPUT_PATH}" -type f | tee -a "${LOG_FILE}" || echo "[WARN] No files found."
 
 # === Run the organizer ===
-echo "[INFO] Step 2: Running organize_audiobooks.sh..." | tee -a "${LOG_FILE}"
+DebugEcho "Step 2: Running organize_audiobooks.sh..."
 bash "${ROOT_DIR}/organize_audiobooks.sh" | tee -a "${LOG_FILE}"
+DebugEcho "✅ Finished running organize_audiobooks.sh"
 
 echo "[INFO] Test run complete." | tee -a "${LOG_FILE}"
+DebugEcho "<<< END run_all_tests.sh"
 ###EOF

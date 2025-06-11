@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # logging.sh — Provides structured logging and DebugEcho support
 
+# 📥 BEGIN logging.sh
+
 # Default to info unless set externally
 LOG_LEVEL="${LOG_LEVEL:-info}"
 
@@ -28,4 +30,6 @@ log_error() {
 DebugEcho() {
   [[ "${LOG_LEVEL}" == "debug" ]] && printf "[DEBUG] %s\n" "$*" >&2
 }
+
+# 📤 END logging.sh
 ###EOF

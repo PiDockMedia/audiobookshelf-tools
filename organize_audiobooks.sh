@@ -5,11 +5,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
 
-source "${LIB_DIR}/config.sh"
-source "${LIB_DIR}/logging.sh"
-source "${LIB_DIR}/tracking.sh"
-source "${LIB_DIR}/metadata.sh"
-source "${LIB_DIR}/filesystem.sh"
+source "lib/logging.sh"
+source "lib/config.sh"
+source "lib/metadata.sh"
+source "lib/filesystem.sh"
+source "lib/tracking.sh"
+
+DebugEcho "====== BEGIN organize_audiobooks.sh ======"
+DebugEcho "LOG_LEVEL is '${LOG_LEVEL}'"
+DebugEcho "INPUT_PATH is '${INPUT_PATH}'"
+DebugEcho "OUTPUT_PATH is '${OUTPUT_PATH}'"
+DebugEcho "CONFIG_PATH is '${CONFIG_PATH}'"
 
 # === Defaults ===
 DRY_RUN="${DRY_RUN:-false}"
@@ -23,7 +29,16 @@ set_tracking_db_path
 
 # === Scan source directory ===
 find "${INPUT_PATH}" -mindepth 1 -maxdepth 1 -type d | while read -r folder; do
-  log_info "→ Processing folder: ${folder}"
+	log_info "→ Processing folder: ${folder}"
+	DebugEcho "Calling resolve_metadata for: ${folder}"
+	metadata_json="$(resolve_metadata "${folder}")"
+	DebugEcho "Raw metadata_json: ${metadata_json}"
+
+if [[ -z "${metadata_json}" ]]; then
+  log_warn "Metadata resolution failed for ${folder}"
+  move_to_unorganized "${folder}" "metadata resolution failed"
+  continue
+fi
 
   audio_found=$(find "${folder}" -type f | grep -Ei "\.(m4b|mp3|flac|ogg|m4a|wav)$" || true)
   if [[ -z "${audio_found}" ]]; then
@@ -72,4 +87,5 @@ find "${INPUT_PATH}" -mindepth 1 -maxdepth 1 -type d | while read -r folder; do
 done
 
 log_info "✅ All done!"
+DebugEcho "====== END organize_audiobooks.sh ======"
 ###EOF

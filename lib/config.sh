@@ -1,50 +1,36 @@
-#!/usr/bin/env bash
-# lib/config.sh - Load global config and environment variables
-# This file MUST be sourced before any other module is used.
+# lib/config.sh - Loads environment variables and sets defaults
+DebugEcho "📥 BEGIN loading config.sh"
 
-# Prevent multiple sourcing
 [[ -n "${_CONFIG_SH_LOADED:-}" ]] && return
 readonly _CONFIG_SH_LOADED=1
 
-# === Detect Mode (Container vs CLI) ===
-IS_CONTAINER=false
-[[ -f "/.dockerenv" || -d "/config" ]] && IS_CONTAINER=true
+# Load .env file if it exists and hasn't already been loaded
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+  DebugEcho "🧪 Sourcing .env from: ${REPO_ROOT}/.env"
+  set -o allexport
+  # shellcheck disable=SC1090
+  source "${REPO_ROOT}/.env"
+  set +o allexport
+else
+  DebugEcho "⚠️ No .env found at ${REPO_ROOT}/.env"
+fi
 
-# === Default Values ===
-ENV_FILE=".env"
-CONFIG_PATH=""
-INPUT_PATH=""
-OUTPUT_PATH=""
-LOG_LEVEL="info"
-DRY_RUN=false
+# Set defaults if not already defined
+: "${INPUT_PATH:=${REPO_ROOT}/input}"
+: "${OUTPUT_PATH:=${REPO_ROOT}/output}"
+: "${CONFIG_PATH:=${REPO_ROOT}/config}"
+: "${LOG_LEVEL:=info}"
+: "${TRACKING_MODE:=JSON}"
+: "${INCLUDE_EXTRAS:=true}"
+: "${DUPLICATE_POLICY:=versioned}"
 
-# === Load .env if present ===
-load_env_file() {
-  local env_path="${SCRIPT_DIR}/${ENV_FILE}"
-  if [[ -f "${env_path}" ]]; then
-    # shellcheck disable=SC1090
-    source "${env_path}"
-  elif [[ "${IS_CONTAINER}" == "true" ]]; then
-    echo "[FATAL] Missing required .env file at ${env_path} inside container." >&2
-    exit 1
-  else
-    echo "[INFO] No .env file found. Using CLI-safe defaults."
-  fi
-}
+DebugEcho "🔧 Config loaded:"
+DebugEcho "    INPUT_PATH=${INPUT_PATH}"
+DebugEcho "    OUTPUT_PATH=${OUTPUT_PATH}"
+DebugEcho "    CONFIG_PATH=${CONFIG_PATH}"
+DebugEcho "    LOG_LEVEL=${LOG_LEVEL}"
+DebugEcho "    TRACKING_MODE=${TRACKING_MODE}"
+DebugEcho "    INCLUDE_EXTRAS=${INCLUDE_EXTRAS}"
+DebugEcho "    DUPLICATE_POLICY=${DUPLICATE_POLICY}"
 
-# === Validate required variables ===
-validate_config() {
-  local missing=()
-  [[ -z "${CONFIG_PATH}" ]] && missing+=("CONFIG_PATH")
-  [[ -z "${INPUT_PATH}" ]] && missing+=("INPUT_PATH")
-  [[ -z "${OUTPUT_PATH}" ]] && missing+=("OUTPUT_PATH")
-
-  if (( ${#missing[@]} )); then
-    echo "[FATAL] Missing required config variables: ${missing[*]}" >&2
-    exit 1
-  fi
-}
-
-# === Initialize ===
-load_env_file
-validate_config
+DebugEcho "📤 END loading config.sh"
