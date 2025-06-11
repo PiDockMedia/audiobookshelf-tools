@@ -15,7 +15,8 @@ source "${LIB_DIR}/filesystem.sh"
 DRY_RUN="${DRY_RUN:-false}"
 THREADS="${THREADS:-1}"
 DELETE_ORIGINAL="${DELETE_ORIGINAL:-false}"
-MOVE_MODE="${TRACKING_MODE:-}" == "MOVE"
+MOVE_MODE=false
+[[ "${TRACKING_MODE:-}" == "MOVE" ]] && MOVE_MODE=true
 
 # === Ensure tracking DB path ===
 set_tracking_db_path
