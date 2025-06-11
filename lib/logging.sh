@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # logging.sh — Provides structured logging and DebugEcho support
 
-# 📥 BEGIN logging.sh
+# shellcheck source=lib/debugecho.sh
+source "${REPO_ROOT}/lib/debugecho.sh"
+
+DebugEcho 📥 BEGIN logging.sh
 
 # Default to info unless set externally
 LOG_LEVEL="${LOG_LEVEL:-info}"
@@ -31,5 +34,5 @@ DebugEcho() {
   [[ "${LOG_LEVEL}" == "debug" ]] && printf "[DEBUG] %s\n" "$*" >&2
 }
 
-# 📤 END logging.sh
+DebugEcho 📤 END logging.sh
 ###EOF
