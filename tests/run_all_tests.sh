@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-set -euo pipefail
+#set -euo pipefail
 
 # === Load DebugEcho and logger ===
 source "$(dirname "$0")/../lib/debugecho.sh"
 source "$(dirname "$0")/../lib/logging.sh"
 
 export LOG_LEVEL=debug
+echo "LOG_LEVEL is now set to: ${LOG_LEVEL}"
+
+export LOG_LEVEL=debug
 DebugEcho "🐚 BEGIN run_all_tests.sh"
+echo "🧪 Got past BEGIN DebugEcho"
 
 # === Set up paths ===
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,7 +68,7 @@ find "${INPUT_PATH}" -type f | tee -a "${LOG_FILE}" || echo "[WARN] No files fou
 
 # === Step 2: Run organizer ===
 DebugEcho "📚 Step 2: Running organize_audiobooks.sh..."
-"${ROOT_DIR}/organize_audiobooks.sh" | tee -a "${LOG_FILE}"
+bash "${ROOT_DIR}/organize_audiobooks.sh" 2>&1 | tee -a "${LOG_FILE}"
 DebugEcho "✅ Finished running organize_audiobooks.sh"
 
 # === Done ===
