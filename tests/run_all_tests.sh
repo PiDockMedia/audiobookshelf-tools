@@ -59,7 +59,7 @@ fi
 
 # === Step 1: Generate test input ===
 DebugEcho "🧪 Step 1: Generating test audiobook files..."
-"${TEST_DIR}/generate_test_audiobooks.sh" | tee -a "${LOG_FILE}"
+bash "${TEST_DIR}/generate_test_audiobooks.sh" 2>&1 | tee -a "${LOG_FILE}"
 DebugEcho "✅ Finished generating test data"
 
 # === Confirm INPUT_PATH contents ===

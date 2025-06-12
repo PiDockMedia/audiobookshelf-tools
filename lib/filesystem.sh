@@ -46,4 +46,27 @@ function generate_safe_output_path() {
   DebugEcho "✅ Output path resolved: ${newpath}"
 }
 
+# === Quarantine Failed Folder ===
+# Moves a folder that failed processing into the 'Unorganized' directory for review.
+# Arguments:
+#   $1 - Path to the failed input folder
+#   $2 - Reason for failure (used in log entry)
+quarantine_failed_folder() {
+  local failed_folder="$1"
+  local reason="$2"
+  local unorganized_dir="${OUTPUT_PATH}/Unorganized"
+
+  DebugEcho "🚫 Quarantining failed folder: ${failed_folder} | Reason: ${reason}"
+  mkdir -p "${unorganized_dir}"
+
+  local base_name
+  base_name="$(basename "${failed_folder}")"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local target="${unorganized_dir}/${base_name}_${timestamp}"
+
+  log_warn "Quarantining '${failed_folder}' → '${target}' (reason: ${reason})"
+  mv "${failed_folder}" "${target}" || log_error "Failed to move to quarantine: ${failed_folder}"
+}
+
 DebugEcho "✅ Finished loading filesystem.sh"

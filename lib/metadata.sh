@@ -21,7 +21,7 @@ extract_from_folder_name() {
     title="${folder_name}"
   fi
 
-  echo "{{\"author\": \"${author}\", \"title\": \"${title}\"}}"
+  echo "{\"author\": \"${author}\", \"title\": \"${title}\"}"
 }
 
 # === Extract from metadata.json if exists ===
@@ -48,7 +48,7 @@ extract_from_sidecar_texts() {
   [[ -f "${title_file}" ]] && title="$(<"${title_file}")"
   [[ -f "${narrator_file}" ]] && narrator="$(<"${narrator_file}")"
 
-  echo "{{\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"${narrator}\"}}"
+  echo "{\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"${narrator}\"}"
 }
 
 # === Best effort metadata resolver ===
