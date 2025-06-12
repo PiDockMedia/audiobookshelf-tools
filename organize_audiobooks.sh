@@ -25,7 +25,7 @@ MOVE_MODE=false
 [[ "${TRACKING_MODE:-}" == "MOVE" ]] && MOVE_MODE=true
 
 # === Ensure tracking DB path ===
-set_tracking_db_path
+# set_tracking_db_path <----- delete this eventually
 
 # === Scan source directory ===
 find "${INPUT_PATH}" -mindepth 1 -maxdepth 1 -type d | while read -r folder; do
