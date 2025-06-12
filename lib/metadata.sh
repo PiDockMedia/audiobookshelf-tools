@@ -53,39 +53,56 @@ extract_from_sidecar_texts() {
 
 # === Best effort metadata resolver ===
 resolve_metadata() {
-  DebugEcho "🔍 resolve_metadata() called with folder: $folder"
   local folder="$1"
-  local folder_name
-  folder_name="$(basename "$folder")"
+  DebugEcho "🔍 resolve_metadata() called with folder: ${folder}"
 
-  local meta=""
+  local metadata_file
+  metadata_file=$(find "${folder}" -maxdepth 1 -type f \( -iname 'metadata.txt' -o -iname 'desc.txt' -o -iname '*.nfo' \) | head -n 1 || true)
 
-  meta="$(extract_from_metadata_json "$folder")"
-  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
-    log_debug "Metadata extracted from metadata.json"
-    DebugEcho "✅ Metadata resolved from .json: ${meta}"
-    echo "${meta}"
+  if [[ -n "${metadata_file}" ]]; then
+    DebugEcho "📄 Found metadata sidecar: ${metadata_file}"
+    local author title narrator
+    author=$(grep -i '^author:' "${metadata_file}" | cut -d':' -f2- | xargs)
+    title=$(grep -i '^title:' "${metadata_file}" | cut -d':' -f2- | xargs)
+    narrator=$(grep -i '^narrator:' "${metadata_file}" | cut -d':' -f2- | xargs)
+
+   if [[ -n "${author}" || -n "${title}" || -n "${narrator}" ]]; then
+  if [[ -n "${author}" && -n "${title}" ]]; then
+    DebugEcho "📎 Metadata resolved from sidecar files: {\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"${narrator}\"}"
+    echo "{\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"${narrator}\"}"
     return 0
+  else
+    DebugEcho "⚠️ Incomplete sidecar metadata (author/title missing); falling back to folder name"
+    author="" title="" narrator=""
   fi
-  
-  meta="$(extract_from_sidecar_texts "$folder")"
-  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
-    log_debug "Metadata extracted from sidecar text files"
-    DebugEcho "📎 Metadata resolved from sidecar files: ${meta}"
-    echo "${meta}"
-    return 0
-  fi
-  
-  meta="$(extract_from_folder_name "${folder_name}")"
-  if [[ -n "${meta}" && "${meta}" != "null" ]]; then
-    log_debug "Metadata parsed from folder name"
-    DebugEcho "🏷️ Metadata parsed from folder name: ${meta}"
-    echo "${meta}"
-  return 0
 fi
+  fi
 
-  log_error "Failed to resolve metadata for folder: ${folder}"
-  return 1
+  DebugEcho "🧠 Attempting to parse metadata from folder name"
+
+  local folder_name
+  folder_name="$(basename "${folder}")"
+
+  # Perl one-liner: split on ' - ' and guess at fields
+  local author title
+  read -r author title < <(
+    perl -Mstrict -Mwarnings -e '
+      my $name = shift;
+      my @parts = split /\s*-\s*/, $name;
+
+      if (@parts == 2) {
+        print "$parts[0]\t$parts[1]\n";
+      } elsif (@parts >= 3 && $parts[1] =~ /\d/ && $parts[1] !~ /[a-z]/i) {
+        # Middle part is likely a number
+        print "$parts[0]\t$parts[2]\n";
+      } else {
+        print "$parts[0]\t" . join(" - ", @parts[1..$#parts]) . "\n";
+      }
+    ' "${folder_name}"
+  )
+
+  DebugEcho "📎 Metadata resolved from folder name: {\"author\": \"${author}\", \"title\": \"${title}\"}"
+  echo "{\"author\": \"${author}\", \"title\": \"${title}\", \"narrator\": \"\"}"
 }
 DebugEcho "📤 END loading metadata.sh"
 ###EOF
