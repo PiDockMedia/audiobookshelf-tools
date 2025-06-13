@@ -1,8 +1,8 @@
-# === Load analyzers ===
-source "${LIB_DIR}/analyzers/metadatafiles.sh"
-source "${LIB_DIR}/analyzers/foldername.sh"
-source "${LIB_DIR}/analyzers/sidetags.sh"
-source "${LIB_DIR}/analyzers/openlibrary.sh"
+# === Dynamically source all analyzers ===
+for analyzer in "${LIB_DIR}/analyzers/"*.sh; do
+  DebugEcho "📦 Loading analyzer: ${analyzer}"
+  source "${analyzer}"
+done
 
 # === Try an analyzer and return if valid ===
 try_analyzer() {
@@ -27,19 +27,34 @@ try_analyzer() {
     return 1
   fi
 }
+# === Validate if it is valid metadata ===
+is_valid_metadata() {
+  local m="$1"
+  DebugEcho "🧪 Validating metadata: $(echo "$m" | jq -c '.')"
 
+  if [[ -n "$(echo "$m" | jq -r '.author // empty')" && -n "$(echo "$m" | jq -r '.title // empty')" ]]; then
+    DebugEcho "✅ Metadata is valid"
+    return 0
+  fi
+
+  DebugEcho "❌ Metadata is invalid: missing author or title"
+  return 1
+}
 # === Orchestrate metadata resolution ===
 resolve_metadata() {
   local folder="$1"
   DebugEcho "🔍 resolve_metadata() called with folder: ${folder}"
 
-  local result
+  local analyzer_script
+  for analyzer_script in "${LIB_DIR}/analyzers/"*.sh; do
+    DebugEcho "📦 Loading analyzer from: ${analyzer_script}"
+    source "${analyzer_script}"
+  done
 
-  # Try analyzers in priority order
-  try_analyzer analyze_metadatafiles "${folder}" && return 0
-  try_analyzer analyze_foldername "${folder}" && return 0
-  try_analyzer analyze_sidetags "${folder}" && return 0
-  try_analyzer analyze_openlibrary "${folder}" && return 0
+  local analyzer
+  for analyzer in $(declare -F | awk '{print $3}' | grep -E '^analyze_'); do
+    try_analyzer "${analyzer}" "${folder}" && return 0
+  done
 
   DebugEcho "❌ All analyzers failed. Returning empty metadata."
   echo '{"author": "", "title": "", "series": "", "series_index": "", "narrator": ""}'

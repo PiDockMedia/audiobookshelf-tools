@@ -35,6 +35,10 @@ function init_tracking_db() {
   esac
 }
 
+setup_tracking() {
+  DebugEcho "📦 setup_tracking() called"
+  init_tracking_db
+}
 function has_been_processed() {
   local folder="$1"
   DebugEcho "🔎 Checking if already processed: ${folder}"
