@@ -29,8 +29,7 @@ analyze_foldername() {
     title="${BASH_REMATCH[3]}"
 
   # === Try pattern: Title (Series, Book ##)
-  pattern='^(.+)\ \(([^,]+),\ Book\ ([0-9]+)\)$'
-  elif [[ "$name" =~ $pattern ]]; then
+  elif [[ "$name" =~ ^(.+)\s*\(([^,]+), Book ([0-9]+)\)$ ]]; then
     title="${BASH_REMATCH[1]}"
     series="${BASH_REMATCH[2]}"
     series_index="${BASH_REMATCH[3]}"
@@ -47,7 +46,7 @@ analyze_foldername() {
   series="$(echo "$series" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
   # === Only output if at least author+title OR series+title are found
-  if [[ -n "$title" && -n "$author" ]] || [[ -n "$title" && -n "$series" ]]; then
+  if [[ -n "$title" && ( -n "$author" || -n "$series" ) ]]; then
     echo "{\"source\": \"foldername\", \"author\": \"${author}\", \"title\": \"${title}\", \"series\": \"${series}\", \"series_index\": \"${series_index}\", \"narrator\": \"\"}"
     return 0
   fi

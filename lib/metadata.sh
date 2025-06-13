@@ -1,5 +1,6 @@
 # === Dynamically source all analyzers ===
-for analyzer in "${LIB_DIR}/analyzers/"*.sh; do
+for analyzer in "${LIB_DIR}/analyzers"/analyze_*.sh; do
+  [[ -f "${analyzer}" ]] || continue
   DebugEcho "📦 Loading analyzer: ${analyzer}"
   source "${analyzer}"
 done
@@ -40,16 +41,11 @@ is_valid_metadata() {
   DebugEcho "❌ Metadata is invalid: missing author or title"
   return 1
 }
+
 # === Orchestrate metadata resolution ===
 resolve_metadata() {
   local folder="$1"
   DebugEcho "🔍 resolve_metadata() called with folder: ${folder}"
-
-  local analyzer_script
-  for analyzer_script in "${LIB_DIR}/analyzers/"*.sh; do
-    DebugEcho "📦 Loading analyzer from: ${analyzer_script}"
-    source "${analyzer_script}"
-  done
 
   local analyzer
   for analyzer in $(declare -F | awk '{print $3}' | grep -E '^analyze_'); do
