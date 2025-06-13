@@ -48,15 +48,25 @@ function generate_safe_output_path() {
 
 # === Quarantine Failed Folder ===
 # Moves a folder that failed processing into the 'Unorganized' directory for review.
+#
+# Globals:
+#   OUTPUT_PATH
+#   DRY_RUN
 # Arguments:
 #   $1 - Path to the failed input folder
 #   $2 - Reason for failure (used in log entry)
+# Outputs:
+#   Log messages and moves the folder, unless in dry run mode
 quarantine_failed_folder() {
   local failed_folder="$1"
   local reason="$2"
   local unorganized_dir="${OUTPUT_PATH}/Unorganized"
 
-  DebugEcho "🚫 Quarantining failed folder: ${failed_folder} | Reason: ${reason}"
+  DebugEcho "🚫 BEGIN quarantine_failed_folder"
+  DebugEcho "🧪 Input folder: ${failed_folder}"
+  DebugEcho "🧪 Reason: ${reason}"
+  DebugEcho "🧪 Unorganized dir: ${unorganized_dir}"
+
   mkdir -p "${unorganized_dir}"
 
   local base_name
@@ -65,8 +75,14 @@ quarantine_failed_folder() {
   timestamp="$(date +%Y%m%d_%H%M%S)"
   local target="${unorganized_dir}/${base_name}_${timestamp}"
 
-  log_warn "Quarantining '${failed_folder}' → '${target}' (reason: ${reason})"
-  mv "${failed_folder}" "${target}" || log_error "Failed to move to quarantine: ${failed_folder}"
+  if [[ "${DRY_RUN:-false}" == "true" ]]; then
+    log_info "[DRY RUN] Would quarantine '${failed_folder}' → '${target}' (reason: ${reason})"
+  else
+    log_warn "Quarantining '${failed_folder}' → '${target}' (reason: ${reason})"
+    mv "${failed_folder}" "${target}" || log_error "Failed to move to quarantine: ${failed_folder}"
+  fi
+
+  DebugEcho "✅ END quarantine_failed_folder"
 }
 
 DebugEcho "✅ Finished loading filesystem.sh"

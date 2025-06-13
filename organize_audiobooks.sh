@@ -17,6 +17,14 @@ DebugEcho "INPUT_PATH is '${INPUT_PATH}'"
 DebugEcho "OUTPUT_PATH is '${OUTPUT_PATH}'"
 DebugEcho "CONFIG_PATH is '${CONFIG_PATH}'"
 
+# === Create config directory ===
+mkdir -p "${CONFIG_PATH}"
+DebugEcho "📁 Ensured config directory exists at: ${CONFIG_PATH}"
+
+# === Set up tracking system ===
+DebugEcho "📦 Setting up tracking system..."
+setup_tracking
+
 # === Defaults ===
 DRY_RUN="${DRY_RUN:-false}"
 THREADS="${THREADS:-1}"
@@ -72,6 +80,7 @@ fi
   safe_author=$(echo "${author}" | tr '/' '_' | tr -s ' ')
   safe_title=$(echo "${title}" | tr '/' '_' | tr -s ' ')
   target_dir="${OUTPUT_PATH}/${safe_author}/${safe_title}"
+  DebugEcho "📁 Destination path will be: ${target_dir}"
 
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "[DRY RUN] Would organize: ${folder} → ${target_dir}"
