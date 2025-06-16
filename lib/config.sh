@@ -1,31 +1,27 @@
-# config.sh
-CONFIG_LOADED=true
+#!/usr/bin/env bash
+# config.sh — Load configuration defaults and overrides
 
+set -euo pipefail
+IFS=$'\n\t'
+
+# --- Set ROOT_DIR to project root
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# --- Load .env if present
 ENV_FILE="${ROOT_DIR}/.env"
+[[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
-INPUT_PATH=""
-OUTPUT_PATH=""
-AI_BUNDLE_PATH="${ROOT_DIR}/ai_bundles"
-DRY_RUN=false
-INGEST_MODE=false
-INGEST_FILE=""
+# --- Core Paths
+INPUT_PATH="${INPUT_PATH:-${ROOT_DIR}/input}"
+OUTPUT_PATH="${OUTPUT_PATH:-${ROOT_DIR}/output}"
+CONFIG_PATH="${CONFIG_PATH:-${ROOT_DIR}/config}"
+LOG_LEVEL="${LOG_LEVEL:-info}"
 
-function parse_cli_args() {
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --dry-run) DRY_RUN=true ;;
-      --ingest) INGEST_MODE=true; INGEST_FILE="$2"; shift ;;
-      *) echo "Unknown option: $1" >&2; exit 1 ;;
-    esac
-    shift
-  done
-}
+# --- Working paths now inside INPUT_PATH
+TRACKING_DB_PATH="${TRACKING_DB_PATH:-${INPUT_PATH}/.audiobook_tracking.db}"
+AI_BUNDLE_PATH="${AI_BUNDLE_PATH:-${INPUT_PATH}/ai_bundles}"
+AI_BUNDLE_PENDING="${AI_BUNDLE_PATH}/pending"
 
-function load_env_config() {
-  if [[ -f "${ENV_FILE}" ]]; then
-    source "${ENV_FILE}"
-  fi
-  INPUT_PATH="${INPUT_PATH:-${ROOT_DIR}/input}"
-  OUTPUT_PATH="${OUTPUT_PATH:-${ROOT_DIR}/output}"
-}
+# --- Optional flags
+DRY_RUN="${DRY_RUN:-false}"
+DEBUG="${DEBUG:-false}"

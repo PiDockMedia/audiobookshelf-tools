@@ -1,59 +1,49 @@
-# ai_bundle.sh - Responsible for generating AI bundles from new/untracked audiobook folders
+#!/usr/bin/env bash
+# ai_bundle.sh — Prepare audiobook folder data for AI metadata inference
 
-function scan_input_and_prepare_ai_bundles() {
-  DebugEcho "📦 scan_input_and_prepare_ai_bundles() started"
-  mkdir -p "${AI_BUNDLE_PATH}/pending"
+set -euo pipefail
+IFS=$'\n\t'
 
-  local bundle_file="${AI_BUNDLE_PATH}/pending/ai_input.jsonl"
-  local prompt_file="${AI_BUNDLE_PATH}/pending/prompt.md"
-  : > "${bundle_file}"  # Truncate if exists
+source "$(dirname "$0")/../lib/config.sh"
+source "$(dirname "$0")/../lib/logging.sh"
+source "$(dirname "$0")/../lib/filesystem.sh"
 
-  for entry in "${INPUT_PATH}"/*; do
-    [[ -e "${entry}" ]] || continue
-    [[ -f "${entry}" || -d "${entry}" ]] || continue
+setup_logging
 
-    local id
-    id="$(basename "$entry" | tr ' ' '_' | tr -dc '[:alnum:]_')"
+DebugEcho "📦 scan_input_and_prepare_ai_bundles() started"
 
-    # Check DB: Skip if already processed or tracked
-    if sqlite3 "${TRACKING_DB}" "SELECT 1 FROM books WHERE id='${id}' AND state='organized';" | grep -q 1; then
-      DebugEcho "⏭️ Skipping already organized: ${id}"
-      continue
-    fi
+mkdir -p "${AI_BUNDLE_PENDING}"
+AI_JSONL="${AI_BUNDLE_PENDING}/ai_input.jsonl"
+: > "$AI_JSONL"
 
-    DebugEcho "📚 Adding ${id} to AI bundle"
+for entry in "$INPUT_PATH"/*; do
+  [[ -d "$entry" ]] || continue
 
-    local folder_tree metadata_preview files
+  id="$(echo "$(basename "$entry")" | tr ' ' '_' | tr '/' '_')"
+  bundle_dir="${AI_BUNDLE_PENDING}/${id}"
 
-    folder_tree=$(tree "$entry" 2>/dev/null | sed 's/^/    /')
-    metadata_preview=$(find "$entry" -type f \( -iname '*.json' -o -iname '*.nfo' -o -iname '*.txt' -o -iname '*.opf' \) -exec head -n 5 {} + 2>/dev/null | sed 's/^/    /')
-    files=$(find "$entry" -type f -exec basename {} \; | sort | uniq | paste -sd ', ' -)
+  DebugEcho "📚 Adding ${id} to AI bundle"
 
-    echo "{\"id\": \"${id}\", \"path\": \"${entry}\", \"filenames\": \"${files}\"}" >> "${bundle_file}"
+  mkdir -p "$bundle_dir"
+  tree "$entry" > "$bundle_dir/tree.txt"
 
-    sqlite3 "${TRACKING_DB}" <<SQL
-INSERT OR REPLACE INTO books (id, path, state, updated_at)
-VALUES ('${id}', '${entry}', 'pending_ai', datetime('now'));
-SQL
-  done
+  cat > "$bundle_dir/prompt.md" <<EOF
+You are helping organize audiobook folders. Here's a folder tree:
+(See tree.txt)
 
-  # Write universal prompt
-  cat > "${prompt_file}" <<EOF
-You are helping organize audiobook folders for ingestion into Audiobookshelf.
-Each line in ai_input.jsonl represents one book entry with basic file info.
-
-Please provide a matching JSON output line per entry like:
+Please return JSON metadata like:
 {
-  "id": "Folder_Or_File_Name",
   "author": "Author Name",
   "title": "Book Title",
-  "series": "Optional Series Name",
+  "series": "Optional Series",
   "series_index": 1,
-  "narrator": "Narrator Name"
+  "narrator": "Optional Narrator"
 }
-
-Do your best using the folder name, filenames, and any nearby .txt, .json, .nfo, .opf files. Be accurate and structured.
 EOF
 
-  DebugEcho "✅ AI bundle created at ${AI_BUNDLE_PATH}/pending"
-}
+  # === Use only the folder name, not the full path
+  base_name="$(basename "$entry")"
+  echo "{\"id\": \"${id}\", \"path\": \"${base_name}\"}" >> "$AI_JSONL"
+done
+
+DebugEcho "✅ AI bundle created at ${AI_BUNDLE_PENDING}"
