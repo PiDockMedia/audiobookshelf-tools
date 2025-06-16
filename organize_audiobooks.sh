@@ -17,7 +17,20 @@ load_env_config
 setup_logging
 init_db
 
-scan_input_and_prepare_ai_bundles
+# === Main scan loop
+for entry in "$INPUT_PATH"/*; do
+  name="$(basename "$entry")"
+
+  # Skip system/working paths
+  [[ "$name" == "ai_bundles" ]] && continue
+  [[ "$name" == ".audiobook_tracking.db" ]] && continue
+
+  # Process if it's a directory or a supported audio file
+  if [[ -d "$entry" || "$entry" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
+    DebugEcho "🔍 Scanning candidate: $name"
+    scan_input_and_prepare_ai_bundles "$entry"
+  fi
+done
 
 if [[ "${INGEST_MODE}" == "true" ]]; then
   ingest_metadata_file "${INGEST_FILE}"
