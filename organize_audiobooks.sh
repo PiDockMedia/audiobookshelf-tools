@@ -23,6 +23,7 @@ AI_BUNDLE_PENDING="${AI_BUNDLE_PATH}/pending"
 # === Optional flags ===
 DRY_RUN="${DRY_RUN:-false}"
 DEBUG="${DEBUG:-false}"
+PAUSE="${PAUSE:-false}"
 
 # === Log Level Defaults ===
 LOG_LEVEL="${LOG_LEVEL:-info}"      # debug | info | warn | error
@@ -95,28 +96,24 @@ function init_db() {
 
 # === AI Bundle Processing ===
 function scan_input_and_prepare_ai_bundles() {
-  local entry="$1"
   DebugEcho "📦 scan_input_and_prepare_ai_bundles() started"
 
   mkdir -p "${AI_BUNDLE_PENDING}"
   AI_JSONL="${AI_BUNDLE_PENDING}/ai_input.jsonl"
+  AI_PROMPT="${AI_BUNDLE_PENDING}/prompt.md"
   : > "$AI_JSONL"
 
-  [[ -d "$entry" ]] || return
+  # Create the comprehensive prompt
+  cat > "$AI_PROMPT" <<EOF
+You are helping organize audiobook folders. For each book, analyze the folder structure and files to identify:
 
-  id="$(echo "$(basename "$entry")" | tr ' ' '_' | tr '/' '_')"
-  bundle_dir="${AI_BUNDLE_PENDING}/${id}"
+1. Author name
+2. Book title
+3. Series name (if part of a series)
+4. Series index/order (if part of a series)
+5. Narrator (if available)
 
-  DebugEcho "📚 Adding ${id} to AI bundle"
-
-  mkdir -p "$bundle_dir"
-  tree "$entry" > "$bundle_dir/tree.txt"
-
-  cat > "$bundle_dir/prompt.md" <<EOF
-You are helping organize audiobook folders. Here's a folder tree:
-(See tree.txt)
-
-Please return JSON metadata like:
+Please return JSON metadata in this format:
 {
   "author": "Author Name",
   "title": "Book Title",
@@ -124,13 +121,50 @@ Please return JSON metadata like:
   "series_index": 1,
   "narrator": "Optional Narrator"
 }
+
+Consider these naming patterns:
+- "Author - Series # - Title"
+- "Author - Title"
+- "Author - Title (Dramatized)"
+- Files like cover.jpg, desc.txt, notes.nfo may contain metadata
+- Audio file names may indicate chapter numbers or parts
+
 EOF
 
-  # === Use only the folder name, not the full path
-  base_name="$(basename "$entry")"
-  echo "{\"id\": \"${id}\", \"path\": \"${base_name}\"}" >> "$AI_JSONL"
+  # Process each entry
+  for entry in "$INPUT_PATH"/*; do
+    name="$(basename "$entry")"
+    DebugEcho "Processing entry: $entry"
+
+    # Skip system/working paths
+    [[ "$name" == "ai_bundles" ]] && continue
+    [[ "$name" == ".audiobook_tracking.db" ]] && continue
+
+    # Process if it's a directory or a supported audio file
+    if [[ -d "$entry" || "$entry" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
+      DebugEcho "🔍 Scanning candidate: $name"
+      
+      # Generate a unique ID for the book
+      id="$(echo "$name" | tr ' ' '_' | tr '/' '_')"
+      
+      # Add entry to JSONL file
+      echo "{\"id\": \"${id}\", \"path\": \"${name}\"}" >> "$AI_JSONL"
+      
+      DebugEcho "📚 Added ${id} to AI bundle"
+    else
+      DebugEcho "Skipping unsupported file: $name"
+    fi
+  done
 
   DebugEcho "✅ AI bundle created at ${AI_BUNDLE_PENDING}"
+}
+
+# === Pause function ===
+function pause() {
+  if [[ "$PAUSE" == "true" ]]; then
+    DebugEcho "⏸️  Pausing... Press Enter to continue..."
+    read -r
+  fi
 }
 
 # === CLI Argument Parsing ===
@@ -139,6 +173,7 @@ function parse_cli_args() {
     case "$1" in
       --dry-run) DRY_RUN="true" ;;
       --debug) DEBUG="true"; LOG_LEVEL="debug" ;;
+      --pause) PAUSE="true" ;;
       --input=*) INPUT_PATH="${1#*=}" ;;
       --output=*) OUTPUT_PATH="${1#*=}" ;;
       --ingest) INGEST_MODE="true" ;;
@@ -148,33 +183,32 @@ function parse_cli_args() {
     shift
   done
   DebugEcho "DRY_RUN is set to: $DRY_RUN"
+  DebugEcho "PAUSE is set to: $PAUSE"
 }
 
 # === Main Execution ===
 print_divider
 DebugEcho "📚 BEGIN organize_audiobooks.sh"
+DebugEcho "Current directory: $(pwd)"
+DebugEcho "INPUT_PATH: ${INPUT_PATH}"
+DebugEcho "OUTPUT_PATH: ${OUTPUT_PATH}"
+DebugEcho "CONFIG_PATH: ${CONFIG_PATH}"
 
 parse_cli_args "$@"
 setup_logging
+
+DebugEcho "Initializing database..."
 init_db
+pause
 
-# === Main scan loop
-for entry in "$INPUT_PATH"/*; do
-  name="$(basename "$entry")"
-
-  # Skip system/working paths
-  [[ "$name" == "ai_bundles" ]] && continue
-  [[ "$name" == ".audiobook_tracking.db" ]] && continue
-
-  # Process if it's a directory or a supported audio file
-  if [[ -d "$entry" || "$entry" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
-    DebugEcho "🔍 Scanning candidate: $name"
-    scan_input_and_prepare_ai_bundles "$entry"
-  fi
-done
+DebugEcho "Starting main scan loop..."
+scan_input_and_prepare_ai_bundles
+pause
 
 if [[ "${INGEST_MODE:-false}" == "true" ]]; then
+  DebugEcho "Starting metadata ingestion..."
   ingest_metadata_file "${INGEST_FILE:-}"
+  pause
 fi
 
 DebugEcho "🏁 END organize_audiobooks.sh"
