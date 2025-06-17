@@ -86,30 +86,99 @@ generate_test_data() {
   echo "📁 Generating test audiobooks in: $INDIR" | tee -a "${LOG_FILE}"
   mkdir -p "$INDIR" "$OUTTEST"
 
+  # Function to add metadata to audio files
+  add_metadata() {
+    local input="$1"
+    local output="$2"
+    shift 2
+    local metadata_args=()
+    
+    # Convert remaining arguments to ffmpeg metadata format
+    while [[ $# -gt 0 ]]; do
+      metadata_args+=(-metadata "$1")
+      shift
+    done
+    
+    ffmpeg -y -i "$input" "${metadata_args[@]}" -c:a copy "$output" &>/dev/null
+    mv "$output" "$input"
+  }
+
   # Create test data in INDIR
   mkdir -p "${INDIR}/Jane Doe - The Haiku Adventure"
   gen_audio "${INDIR}/Jane Doe - The Haiku Adventure/Chapter" aac 64k m4b "Haiku: Light breeze whispers. Audiobookshelf test file. Metadata waits."
+  # Add metadata to Jane Doe's book
+  add_metadata "${INDIR}/Jane Doe - The Haiku Adventure/Chapter.m4b" "${INDIR}/Jane Doe - The Haiku Adventure/Chapter_meta.m4b" \
+    "title=The Haiku Adventure" \
+    "artist=Jane Doe" \
+    "author=Jane Doe" \
+    "narrator=Jane Doe" \
+    "publisher=Test Publisher" \
+    "year=2024" \
+    "genre=Audiobook" \
+    "comment=Test metadata for AI analysis"
 
   mkdir -p "${INDIR}/Ada Palmer - Terra Ignota 1 - Lightning"
   gen_audio "${INDIR}/Ada Palmer - Terra Ignota 1 - Lightning/Book One" libvorbis 64k ogg "Book one in a sci-fi saga. With cover art."
   echo "cover.jpg" > "${INDIR}/Ada Palmer - Terra Ignota 1 - Lightning/cover.jpg"
+  # Add metadata to Ada Palmer's first book
+  add_metadata "${INDIR}/Ada Palmer - Terra Ignota 1 - Lightning/Book One.ogg" "${INDIR}/Ada Palmer - Terra Ignota 1 - Lightning/Book One_meta.ogg" \
+    "title=Too Like the Lightning" \
+    "artist=Ada Palmer" \
+    "author=Ada Palmer" \
+    "album=Terra Ignota" \
+    "series=Terra Ignota" \
+    "series_index=1" \
+    "narrator=Multiple Narrators" \
+    "publisher=Tor Books" \
+    "year=2016" \
+    "genre=Science Fiction"
 
   mkdir -p "${INDIR}/John Smith - Jungle Fire"
   for i in {1..3}; do
     gen_audio "${INDIR}/John Smith - Jungle Fire/Chapter $(printf '%02d' $i)" libmp3lame 64k mp3 "Chapter $i of Jungle Fire. Jungle sounds ahead."
   done
   echo "<nfo>Jungle metadata</nfo>" > "${INDIR}/John Smith - Jungle Fire/notes.nfo"
+  # Add metadata to John Smith's book
+  add_metadata "${INDIR}/John Smith - Jungle Fire/Chapter 01.mp3" "${INDIR}/John Smith - Jungle Fire/Chapter 01_meta.mp3" \
+    "title=Jungle Fire" \
+    "artist=John Smith" \
+    "author=John Smith" \
+    "narrator=John Smith" \
+    "publisher=Adventure Press" \
+    "year=2023" \
+    "genre=Adventure"
 
   mkdir -p "${INDIR}/Unknown_0000_Mystery_Title"
   gen_audio "${INDIR}/Unknown_0000_Mystery_Title/random_book" flac 64k flac "Unknown title. Unknown author. Still a valid book."
 
   mkdir -p "${INDIR}/Loud Author - Loud Book"
   gen_audio "${INDIR}/Loud Author - Loud Book/OnlyChapter" pcm_s16le 128k wav "This book is loud. Turn down the volume."
+  # Add metadata to Loud Book
+  add_metadata "${INDIR}/Loud Author - Loud Book/OnlyChapter.wav" "${INDIR}/Loud Author - Loud Book/OnlyChapter_meta.wav" \
+    "title=Loud Book" \
+    "artist=Loud Author" \
+    "author=Loud Author" \
+    "narrator=Loud Narrator" \
+    "publisher=Volume Press" \
+    "year=2024" \
+    "genre=Experimental"
 
   mkdir -p "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)"
   gen_audio "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)/Too Like the Lightning [B09G8FTD69]" aac 64k m4b "Dramatized Lightning. Full cast recording."
   echo "cover.jpg" > "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)/cover.jpg"
   echo "Dramatized narration." > "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)/desc.txt"
+  # Add metadata to Ada Palmer's dramatized version
+  add_metadata "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)/Too Like the Lightning [B09G8FTD69].m4b" "${INDIR}/Ada Palmer - Terra Ignota 1 - Too Like the Lightning (Dramatized)/Too Like the Lightning [B09G8FTD69]_meta.m4b" \
+    "title=Too Like the Lightning (Dramatized)" \
+    "artist=Ada Palmer" \
+    "author=Ada Palmer" \
+    "album=Terra Ignota" \
+    "series=Terra Ignota" \
+    "series_index=1" \
+    "narrator=Full Cast" \
+    "publisher=Audible Studios" \
+    "year=2021" \
+    "genre=Dramatized Audiobook"
 
   echo "✅ Test data ready. Run with '--clean' to remove or '--with-tts' for spoken content." | tee -a "${LOG_FILE}"
 }

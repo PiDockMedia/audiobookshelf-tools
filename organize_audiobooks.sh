@@ -105,13 +105,40 @@ function scan_input_and_prepare_ai_bundles() {
 
   # Create the comprehensive prompt
   cat > "$AI_PROMPT" <<EOF
-You are helping organize audiobook folders. For each book, analyze the folder structure and files to identify:
+You are an expert audiobook metadata analyzer. Your task is to analyze each audiobook entry and determine the most accurate metadata for organizing the collection.
 
-1. Author name
-2. Book title
-3. Series name (if part of a series)
-4. Series index/order (if part of a series)
-5. Narrator (if available)
+For each book, analyze the following sources of information in order of reliability:
+
+1. Embedded Audio Metadata (highest priority)
+   - Check audio_metadata field for:
+     * author/artist
+     * title
+     * series name (from album or series field)
+     * series index (from series_index or track field)
+     * narrator
+     * publisher
+     * year
+
+2. Folder Structure and Naming
+   - Analyze folder_name for patterns like:
+     * "Author - Series # - Title"
+     * "Author - Title"
+     * "Author - Title (Dramatized)"
+   - Check naming_pattern field for detected pattern
+   - Look for series indicators (book_number, part_number, volume_number)
+
+3. Supporting Files
+   - Check for metadata files:
+     * cover.jpg/png (may contain visual metadata)
+     * desc.txt/description.txt (may contain book description)
+     * notes.nfo (may contain additional metadata)
+   - Review description_preview if available
+   - Check nfo_content if available
+
+4. Audio File Analysis
+   - Review audio_files list for chapter/part indicators
+   - Check audio_formats for file types
+   - Consider total_duration for book length
 
 Please return JSON metadata in this format:
 {
@@ -119,17 +146,79 @@ Please return JSON metadata in this format:
   "title": "Book Title",
   "series": "Optional Series",
   "series_index": 1,
-  "narrator": "Optional Narrator"
+  "narrator": "Optional Narrator",
+  "confidence": {
+    "author": "high|medium|low",
+    "title": "high|medium|low",
+    "series": "high|medium|low",
+    "series_index": "high|medium|low",
+    "narrator": "high|medium|low"
+  },
+  "sources": {
+    "author": ["embedded_metadata", "folder_name", "description"],
+    "title": ["embedded_metadata", "folder_name", "description"],
+    "series": ["embedded_metadata", "folder_name", "description"],
+    "series_index": ["embedded_metadata", "folder_name", "description"],
+    "narrator": ["embedded_metadata", "folder_name", "description"]
+  }
 }
 
-Consider these naming patterns:
-- "Author - Series # - Title"
-- "Author - Title"
-- "Author - Title (Dramatized)"
-- Files like cover.jpg, desc.txt, notes.nfo may contain metadata
-- Audio file names may indicate chapter numbers or parts
+Confidence levels should be based on:
+- high: Multiple reliable sources agree or strong single source
+- medium: Single reliable source or multiple weak sources
+- low: Weak or conflicting sources
 
+Sources should list all places where the information was found, in order of reliability.
+
+For each field, prioritize:
+1. Embedded audio metadata (most reliable)
+2. Folder naming patterns
+3. Supporting files (description, NFO)
+4. Audio file analysis
+
+If information is missing or conflicting, explain your reasoning in the confidence field.
 EOF
+
+  # Function to extract metadata using ffprobe
+  extract_audio_metadata() {
+    local file="$1"
+    local metadata="{}"
+    
+    if command -v ffprobe &>/dev/null; then
+      # Extract common metadata tags
+      local tags=(
+        "title"
+        "artist"
+        "author"
+        "album"
+        "album_artist"
+        "composer"
+        "narrator"
+        "publisher"
+        "date"
+        "year"
+        "track"
+        "disc"
+        "series"
+        "series_index"
+        "genre"
+        "comment"
+      )
+      
+      for tag in "${tags[@]}"; do
+        # Try both format_tags and tags for better compatibility
+        value=$(ffprobe -v error -show_entries format_tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+        if [[ -z "$value" ]]; then
+          value=$(ffprobe -v error -show_entries tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+        fi
+        if [[ -n "$value" ]]; then
+          metadata=$(echo "$metadata" | jq --arg k "$tag" --arg v "$value" '. + {($k): $v}')
+        fi
+      done
+    fi
+    
+    echo "$metadata"
+  }
 
   # Process each entry
   for entry in "$INPUT_PATH"/*; do
@@ -147,10 +236,135 @@ EOF
       # Generate a unique ID for the book
       id="$(echo "$name" | tr ' ' '_' | tr '/' '_')"
       
-      # Add entry to JSONL file
-      echo "{\"id\": \"${id}\", \"path\": \"${name}\"}" >> "$AI_JSONL"
+      # Initialize metadata object
+      declare -A metadata=(
+        ["id"]="$id"
+        ["path"]="$name"
+        ["folder_name"]="$name"
+        ["audio_files"]="[]"
+        ["metadata_files"]="[]"
+        ["file_count"]="0"
+        ["has_cover"]="false"
+        ["has_description"]="false"
+        ["has_nfo"]="false"
+        ["has_metadata"]="false"
+        ["audio_formats"]="[]"
+        ["total_duration"]="0"
+        ["file_sizes"]="{}"
+        ["naming_pattern"]="unknown"
+        ["audio_metadata"]="{}"
+      )
+
+      # If it's a directory, scan its contents
+      if [[ -d "$entry" ]]; then
+        # Initialize arrays for audio and metadata files
+        audio_files=()
+        metadata_files=()
+        audio_formats=()
+        declare -A file_sizes=()
+        total_duration=0
+        all_audio_metadata="{}"
+
+        # Scan directory contents
+        while IFS= read -r file; do
+          filename="$(basename "$file")"
+          
+          # Check for metadata files
+          case "$filename" in
+            cover.jpg|cover.png|cover.jpeg)
+              metadata["has_cover"]="true"
+              metadata_files+=("$filename")
+              ;;
+            desc.txt|description.txt|info.txt)
+              metadata["has_description"]="true"
+              metadata_files+=("$filename")
+              # Read first few lines of description
+              if [[ -f "$file" ]]; then
+                metadata["description_preview"]="$(head -n 3 "$file" | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+              fi
+              ;;
+            *.nfo)
+              metadata["has_nfo"]="true"
+              metadata_files+=("$filename")
+              # Read NFO content
+              if [[ -f "$file" ]]; then
+                metadata["nfo_content"]="$(cat "$file" | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+              fi
+              ;;
+          esac
+
+          # Check for audio files
+          if [[ "$file" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
+            audio_files+=("$filename")
+            format="${file##*.}"
+            audio_formats+=("$format")
+            
+            # Get file size
+            if [[ -f "$file" ]]; then
+              size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
+              file_sizes["$filename"]="$size"
+              
+              # Try to get duration using ffprobe if available
+              if command -v ffprobe &>/dev/null; then
+                duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+                if [[ -n "$duration" ]]; then
+                  total_duration=$(echo "$total_duration + $duration" | bc)
+                fi
+                
+                # Extract audio metadata
+                file_metadata=$(extract_audio_metadata "$file")
+                if [[ "$file_metadata" != "{}" ]]; then
+                  metadata["has_metadata"]="true"
+                  # Merge metadata, preferring non-empty values
+                  all_audio_metadata=$(echo "$all_audio_metadata" "$file_metadata" | jq -s '.[0] * .[1]')
+                fi
+              fi
+            fi
+          fi
+        done < <(find "$entry" -type f)
+
+        # Update metadata with collected information
+        metadata["file_count"]="${#audio_files[@]}"
+        metadata["audio_files"]="$(printf '%s\n' "${audio_files[@]}" | jq -R . | jq -s .)"
+        metadata["metadata_files"]="$(printf '%s\n' "${metadata_files[@]}" | jq -R . | jq -s .)"
+        metadata["audio_formats"]="$(printf '%s\n' "${audio_formats[@]}" | jq -R . | jq -s .)"
+        metadata["total_duration"]="$total_duration"
+        metadata["file_sizes"]="$(printf '%s\n' "${!file_sizes[@]}" | jq -R . | jq -s .)"
+        metadata["audio_metadata"]="$all_audio_metadata"
+
+        # Analyze naming pattern
+        if [[ "$name" =~ ^[^-]+-[^-]+-[^-]+$ ]]; then
+          metadata["naming_pattern"]="author-series-title"
+        elif [[ "$name" =~ ^[^-]+-[^-]+$ ]]; then
+          metadata["naming_pattern"]="author-title"
+        elif [[ "$name" =~ \(Dramatized\)$ ]]; then
+          metadata["naming_pattern"]="author-title-dramatized"
+        fi
+
+        # Check for series indicators
+        if [[ "$name" =~ [Bb]ook[[:space:]]*[0-9]+ ]]; then
+          metadata["series_indicator"]="book_number"
+        elif [[ "$name" =~ [Pp]art[[:space:]]*[0-9]+ ]]; then
+          metadata["series_indicator"]="part_number"
+        elif [[ "$name" =~ [Vv]olume[[:space:]]*[0-9]+ ]]; then
+          metadata["series_indicator"]="volume_number"
+        fi
+      fi
+
+      # Convert metadata to JSON and add to JSONL file
+      json="{}"
+      for key in "${!metadata[@]}"; do
+        value="${metadata[$key]}"
+        # Handle arrays and objects specially
+        if [[ "$value" == "["* ]] || [[ "$value" == "{"* ]]; then
+          json="$(echo "$json" | jq --arg k "$key" --argjson v "$value" '. + {($k): $v}')"
+        else
+          json="$(echo "$json" | jq --arg k "$key" --arg v "$value" '. + {($k): $v}')"
+        fi
+      done
+      echo "$json" >> "$AI_JSONL"
       
-      DebugEcho "📚 Added ${id} to AI bundle"
+      DebugEcho "📚 Added ${id} to AI bundle with enhanced metadata"
     else
       DebugEcho "Skipping unsupported file: $name"
     fi
