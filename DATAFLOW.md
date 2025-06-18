@@ -7,8 +7,11 @@
 2. Ready for AI Scan
    - The script extracts all available metadata (embedded, folder, supporting files) and creates a JSONL entry for the book.
    - The book's status in the DB is updated to 'ready_for_ai'.
+   - An AI ready prompt.md file is also created which contains a comprehensive prompt to pass to the AI to process the uploaded JSONL file, analyze the information and gather or confirm additional information from Audiobook resources to identify or confirm existing and additional information to be used to populate the JSONL file that the AI generates.
+   - The AI delivers the JSONL with the analyzed data.
 
 3. AI Scan Returned
+   - The AI created JSON is dropped in the input/ai_bundles directory to be processed on the next run.
    - When an AI response is available (either simulated or real), the script updates the DB entry to 'ai_returned'.
    - If the AI cannot determine metadata, the status is set to 'ai_failed', and the book is flagged for manual intervention.
 
@@ -20,49 +23,19 @@
    - If a book is removed from INPUT_PATH (external to this script), the script detects its absence and removes its entry from the DB.
 
 6. DB Persistence
-   - The tracking DB lives in the INPUT_PATH and persists across runs, except during test runs with --clean, which removes the input folder and DB.
-
-7. Test Mode
-   - In test mode, the DB is destroyed with the input folder on --clean.
+   - The tracking DB lives in the INPUT_PATH and persists across runs.
 
 ---
 
 (These steps are always kept in sync with the comments at the top of organize_audiobooks.sh. Any change to the script's logic must be reflected here.)
 
-# DATAFLOW: AI Audiobook Organizer (Production)
-
-This document describes the dataflow for the `organize_audiobooks.sh` script as used in production to organize audiobook collections using AI-powered metadata extraction and analysis.
-
----
-
-## 1. Input Directory Structure
+## Input Directory Structure
 - **User provides an input directory** containing unorganized audiobook folders and files. These may include:
   - Audio files (various formats: .m4b, .mp3, .flac, etc.)
   - Cover images, description files, NFOs, etc.
   - Folder names may contain author, title, series, etc.
 
-## 2. Metadata Extraction
-- For each audiobook folder:
-  - **Extract embedded metadata** from audio files using `ffprobe` (title, author, narrator, year, etc.).
-  - **Scan folder and file names** for additional metadata (author, title, series, etc.).
-  - **Collect supporting files** (cover images, description.txt, info.nfo, etc.).
-  - **Aggregate all discovered metadata** into a structured JSON object for each book.
-
-## 3. AI Bundle Preparation
-- All metadata and file structure information is compiled into a single JSONL file (`ai_input.jsonl`).
-- A comprehensive prompt (`prompt.md`) is generated to instruct the AI on how to analyze the books and extract the most reliable metadata.
-
-## 4. AI Analysis (External Step)
-- The JSONL and prompt are sent to an AI (e.g., ChatGPT) for analysis.
-- The AI returns a response for each book, providing structured metadata (author, title, series, series index, narrator, etc.), confidence scores, and sources for each field.
-- The AI responses are saved in a JSONL file (or as individual JSON files) in the `ai_bundles/pending` directory.
-
-## 5. Organization Step
-- The script reads the AI response(s) and, for each book:
-  - **Determines the correct folder structure and naming** based on Audiobookshelf conventions and the AI metadata.
-  - **Moves/copies files** into the organized output directory, creating author, series, and book folders as needed. The default is to copy.
-
-## 6. Output Directory Structure
+## Output Directory Structure
 - **Folder Structure** encodes all relevant metadata directly in the directory and file names, following extended Audiobookshelf conventions. No `metadata.json` or other metadata files are created in the output, as Audiobookshelf will generate its own database.
 - The output directory contains a fully organized audiobook library:
   - Author folders ("Last, First")

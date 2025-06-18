@@ -30,7 +30,7 @@
 #    - The tracking DB is created in the input folder and destroyed with --clean.
 #
 # 8. Sync with Documentation
-#    - These steps are always kept in sync with tests/DATAFLOW.md. Any change to the script's logic must be reflected there.
+#    - These steps are always kept in sync with tests/DATAFLOW_TEST.md. Any change to the script's logic must be reflected there.
 #
 # === End Test Harness Dataflow & Logic ===
 
