@@ -147,3 +147,42 @@ Options:
 ## License
 
 MIT License - see LICENSE file for details
+
+## Example Output Directory Structure (Full Detail)
+```
+/OrganizedAudiobooks/
+  Austen, Jane/
+    1813 - Pride and Prejudice {Elizabeth Klett}/
+      Pride and Prejudice.m4b
+      cover.jpg
+      description.txt
+  Doyle, Arthur Conan/
+    Sherlock Holmes/
+      Book 1 - 1892 - The Adventures of Sherlock Holmes {David Clarke}/
+        The Adventures of Sherlock Holmes.m4b
+        cover.jpg
+        description.txt
+  Melville, Herman/
+    1851 - Moby Dick {Stewart Wills}/
+      Disc 1/
+        Moby Dick - Disc 1.m4b
+      Disc 2/
+        Moby Dick - Disc 2.m4b
+      description.txt
+  Sun, Tzu/
+    The Art of War/
+      1910 - The Art of War {Lionel Giles}/
+        The Art of War.m4b
+        The Art of War.mp3
+        The Art of War.flac
+        description.txt
+  Aesop/
+    Aesop's Fables/
+      Aesop's Fables.m4b
+      description.txt
+```
+
+## Troubleshooting
+
+- If you see FFmpeg errors about 'Unable to choose an output format for ... .tmp', ensure the temp file extension preserves the original audio extension (e.g., .tmp.m4b) so FFmpeg can infer the format.
+- If you see many jq parse errors or 'Source directory not found' during test runs, ensure the AI bundle (ai_input.jsonl) is present, valid, and matches the generated test data. The test harness now auto-generates a simulated bundle after test data generation.

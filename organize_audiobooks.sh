@@ -1,4 +1,33 @@
 #!/usr/bin/env bash
+#
+# === AI Audiobook Organizer: Full Dataflow & Tracking Logic ===
+#
+# 1. Book Arrival & Initial Acceptance
+#    - When a new book folder or file appears in the INPUT_PATH, it is detected by the script.
+#    - The script adds an entry for the book in the tracking database (SQLite or JSON), marking its status as 'accepted'.
+#
+# 2. Ready for AI Scan
+#    - The script extracts all available metadata (embedded, folder, supporting files) and creates a JSONL entry for the book.
+#    - The book's status in the DB is updated to 'ready_for_ai'.
+#
+# 3. AI Scan Returned
+#    - When an AI response is available (either simulated or real), the script updates the DB entry to 'ai_returned'.
+#    - If the AI cannot determine metadata, the status is set to 'ai_failed', and the book is flagged for manual intervention.
+#
+# 4. Organization
+#    - For books with 'ai_returned' status, the script organizes (copies) them to the OUTPUT_PATH using the AI metadata.
+#    - The DB entry is updated to 'organized'.
+#
+# 5. Book Disappearance
+#    - If a book is removed from INPUT_PATH (external to this script), the script detects its absence and removes its entry from the DB.
+#
+# 6. DB Persistence
+#    - The tracking DB lives in the INPUT_PATH and persists across runs, except during test runs with --clean, which removes the input folder and DB.
+#
+# 7. Test Mode
+#    - In test mode, the DB is destroyed with the input folder on --clean.
+#
+# === End Dataflow & Tracking Logic ===
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -400,6 +429,211 @@ function parse_cli_args() {
   DebugEcho "PAUSE is set to: $PAUSE"
 }
 
+# === Logging Functions ===
+log_info() {
+    echo "[INFO] $1"
+}
+log_error() {
+    echo "[ERROR] $1" >&2
+}
+log_debug() {
+    if [ "$LOG_LEVEL" = "debug" ]; then
+        echo "[DEBUG] $1"
+    fi
+}
+log_warn() {
+    echo "[WARN] $1"
+}
+
+# === Organization Functions ===
+
+# Function to format author name in "Last, First" format
+format_author_name() {
+    local author="$1"
+    if [[ $author =~ ^([^,]+),\s*([^,]+)$ ]]; then
+        echo "$author"  # Already in "Last, First" format
+    else
+        # Try to split on spaces and assume last word is last name
+        local last_name=$(echo "$author" | rev | cut -d' ' -f1 | rev)
+        local first_name=$(echo "$author" | sed "s/$last_name$//" | sed 's/ $//')
+        echo "$last_name, $first_name"
+    fi
+}
+
+# Function to create folder name based on metadata and detail level
+create_folder_name() {
+    local metadata="$1"
+    local detail_level="${AUDIOBOOKSHELF_NAME_DETAIL:-standard}"
+    
+    # Extract metadata fields
+    local year=$(echo "$metadata" | jq -r '.year.value // empty')
+    local title=$(echo "$metadata" | jq -r '.title.main // empty')
+    local subtitle=$(echo "$metadata" | jq -r '.title.subtitle // empty')
+    local narrator=$(echo "$metadata" | jq -r '.narrator.value // empty')
+    local series=$(echo "$metadata" | jq -r '.series.name // empty')
+    local series_index=$(echo "$metadata" | jq -r '.series.index // empty')
+    
+    # Build folder name based on detail level
+    local folder_name=""
+    
+    if [ -n "$series" ] && [ -n "$series_index" ]; then
+        # Series book
+        folder_name="Book $series_index"
+        if [ "$detail_level" != "minimal" ]; then
+            if [ -n "$year" ]; then
+                folder_name="$folder_name - $year"
+            fi
+            folder_name="$folder_name - $title"
+            if [ -n "$subtitle" ]; then
+                folder_name="$folder_name - $subtitle"
+            fi
+            if [ -n "$narrator" ] && [ "$detail_level" = "full" ]; then
+                folder_name="$folder_name {$narrator}"
+            fi
+        else
+            folder_name="$folder_name - $title"
+        fi
+    else
+        # Standalone book
+        if [ "$detail_level" != "minimal" ]; then
+            if [ -n "$year" ]; then
+                folder_name="$year - "
+            fi
+            folder_name="${folder_name}$title"
+            if [ -n "$subtitle" ]; then
+                folder_name="$folder_name - $subtitle"
+            fi
+            if [ -n "$narrator" ] && [ "$detail_level" = "full" ]; then
+                folder_name="$folder_name {$narrator}"
+            fi
+        else
+            folder_name="$title"
+        fi
+    fi
+    
+    echo "$folder_name"
+}
+
+# Function to process AI response and organize files
+process_ai_response_and_organize() {
+    local ai_response_file="$1"
+    local source_path="$2"
+    local output_path="$3"
+    
+    # Check if AI response exists
+    if [ ! -f "$ai_response_file" ]; then
+        log_debug "No AI response found at $ai_response_file"
+        return 1
+    fi
+    
+    # Read and validate AI response
+    local metadata=$(cat "$ai_response_file")
+    if ! echo "$metadata" | jq . >/dev/null 2>&1; then
+        log_error "Invalid JSON in AI response: $ai_response_file"
+        return 1
+    fi
+    
+    # Extract required fields
+    local author=$(echo "$metadata" | jq -r '.author.last + ", " + .author.first')
+    local title=$(echo "$metadata" | jq -r '.title.main')
+    
+    # Validate required fields
+    if [ -z "$author" ] || [ "$author" = "null" ] || [ -z "$title" ] || [ "$title" = "null" ]; then
+        log_error "Missing required fields (author/title) in AI response: $ai_response_file"
+        return 1
+    fi
+    
+    # Format author name
+    author=$(format_author_name "$author")
+    
+    # Create folder name
+    local folder_name=$(create_folder_name "$metadata")
+    
+    # Create output directory structure
+    local author_dir="$output_path/$author"
+    local book_dir="$author_dir/$folder_name"
+    
+    # Handle series books
+    local series=$(echo "$metadata" | jq -r '.series.name // empty')
+    if [ -n "$series" ] && [ "$series" != "null" ]; then
+        book_dir="$author_dir/$series/$folder_name"
+    fi
+    
+    # Create directories
+    mkdir -p "$book_dir"
+    
+    # Copy all files from source to destination
+    log_debug "Copying files from $source_path to $book_dir"
+    cp -R "$source_path"/* "$book_dir/"
+    
+    # Save metadata
+    echo "$metadata" > "$book_dir/metadata.json"
+    
+    log_debug "Successfully organized book: $author - $folder_name"
+    return 0
+}
+
+# Function to process all AI responses
+process_all_ai_responses() {
+    local input_path="$1"
+    local output_path="$2"
+    local ai_bundles_dir="$input_path/ai_bundles"
+    local processed_count=0
+    local error_count=0
+    
+    # Process JSONL file if it exists
+    local jsonl_file="$ai_bundles_dir/pending/ai_input.jsonl"
+    if [ -f "$jsonl_file" ]; then
+        log_debug "Processing JSONL file: $jsonl_file"
+        while IFS= read -r line; do
+            # Create temporary response file
+            local temp_response=$(mktemp)
+            echo "$line" > "$temp_response"
+            
+            # Extract source directory from input_path in JSON
+            local source_dir=$(echo "$line" | jq -r '.input_path')
+            if [ -d "$source_dir" ]; then
+                if process_ai_response_and_organize "$temp_response" "$source_dir" "$output_path"; then
+                    ((processed_count++))
+                else
+                    ((error_count++))
+                fi
+            else
+                log_error "Source directory not found: $source_dir"
+                ((error_count++))
+            fi
+            
+            # Clean up temporary file
+            rm -f "$temp_response"
+        done < "$jsonl_file"
+    fi
+    
+    # Process individual JSON files if they exist
+    while IFS= read -r -d '' response_file; do
+        # Get corresponding source directory
+        local book_id=$(basename "$(dirname "$response_file")")
+        local source_dir="$input_path/$book_id"
+        
+        if [ -d "$source_dir" ]; then
+            if process_ai_response_and_organize "$response_file" "$source_dir" "$output_path"; then
+                ((processed_count++))
+            else
+                ((error_count++))
+            fi
+        else
+            log_error "Source directory not found for book ID: $book_id"
+            ((error_count++))
+        fi
+    done < <(find "$ai_bundles_dir" -name "ai_response.json" -print0)
+    
+    log_info "Processed $processed_count books successfully"
+    if [ $error_count -gt 0 ]; then
+        log_warn "Encountered $error_count errors during processing"
+    fi
+    
+    return $error_count
+}
+
 # === Main Execution ===
 print_divider
 DebugEcho "📚 BEGIN organize_audiobooks.sh"
@@ -423,6 +657,16 @@ if [[ "${INGEST_MODE:-false}" == "true" ]]; then
   DebugEcho "Starting metadata ingestion..."
   ingest_metadata_file "${INGEST_FILE:-}"
   pause
+fi
+
+if [ "$DRY_RUN" = false ]; then
+    # Process AI responses and organize files
+    log_info "Processing AI responses and organizing files..."
+    if ! process_all_ai_responses "$INPUT_PATH" "$OUTPUT_PATH"; then
+        log_error "Errors occurred during file organization"
+        exit 1
+    fi
+    log_info "File organization completed successfully"
 fi
 
 DebugEcho "🏁 END organize_audiobooks.sh"
