@@ -275,6 +275,13 @@ if [ "$CLEAN" = true ]; then
     rm -rf "$OUTDIR"
     mkdir -p "$OUTDIR/input"
     mkdir -p "$OUTDIR/output"
+    
+    # If --clean is the only flag specified, exit after cleaning
+    if [ "$GENERATE" != true ] && [ "$DRY_RUN" != true ] && [ "$PAUSE" != true ] && [ "$DEBUG" != true ]; then
+        log_info "✅ Clean completed successfully"
+        log_info "🏁 END run_all_tests.sh"
+        exit 0
+    fi
 fi
 
 if [ "$GENERATE" = true ]; then
