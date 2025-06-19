@@ -10,9 +10,10 @@
 #    - Create audio files (optionally with TTS), embed metadata, and add supporting files (cover, description, NFO).
 #    - Ensure all test data is copyright-safe and reproducible.
 #
-# 3. Simulated AI Bundle Generation
-#    - Write a valid, single-line JSONL file (ai_input.jsonl) for all test books, with minimal folder paths.
-#    - This bundle simulates the output of an AI metadata extraction step.
+# 3. AI Bundle Generation
+#    - The script generates the AI bundle (ai_input.jsonl and prompt.md) in the input/ai_bundles/pending directory as in production.
+#    - For full-pipeline tests, let the script generate this file naturally.
+#    - For organization-only tests, you may inject a simulated AI response file to skip the AI analysis step.
 #
 # 4. Pause for AI Step (Optional)
 #    - If --pause is specified, pause after AI bundle generation for manual or automated AI response injection.

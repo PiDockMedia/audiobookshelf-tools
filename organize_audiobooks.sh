@@ -123,6 +123,93 @@ function init_db() {
   sqlite3 "${TRACKING_DB_PATH}" "CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, path TEXT, state TEXT, updated_at TEXT);"
 }
 
+# === Helper Functions ===
+
+# Function to check if a directory contains audio files
+has_audio_files() {
+  local dir="$1"
+  if [[ ! -d "$dir" ]]; then
+    return 1
+  fi
+  
+  # Check for common audio file extensions
+  if find "$dir" -maxdepth 1 -type f \( -iname "*.m4b" -o -iname "*.m4a" -o -iname "*.mp3" -o -iname "*.flac" -o -iname "*.wav" -o -iname "*.ogg" -o -iname "*.aac" \) | head -1 | grep -q .; then
+    return 0  # Found audio files
+  else
+    return 1  # No audio files found
+  fi
+}
+
+# Function to extract metadata from folder name
+extract_metadata_from_folder() {
+  local dir="$1"
+  local -n metadata_ref="$2"
+  local folder_name=$(basename "$dir")
+  
+  # Extract year from folder name (e.g., "1813 - Pride and Prejudice")
+  if [[ "$folder_name" =~ ([0-9]{4})\ -\ (.+) ]]; then
+    metadata_ref["year"]="${BASH_REMATCH[1]}"
+    metadata_ref["title"]="${BASH_REMATCH[2]}"
+  fi
+  
+  # Extract narrator from braces (e.g., "Pride and Prejudice {Elizabeth Klett}")
+  if [[ "$folder_name" =~ (.+)\ \{([^}]+)\}$ ]]; then
+    metadata_ref["title"]="${BASH_REMATCH[1]}"
+    metadata_ref["narrator"]="${BASH_REMATCH[2]}"
+  fi
+}
+
+# Function to extract metadata from supporting files
+extract_metadata_from_files() {
+  local dir="$1"
+  local -n metadata_ref="$2"
+  
+  # Check for description file
+  if [[ -f "$dir/description.txt" ]]; then
+    metadata_ref["description"]=$(cat "$dir/description.txt")
+  fi
+  
+  # Check for NFO file
+  if [[ -f "$dir/info.nfo" ]]; then
+    metadata_ref["nfo"]=$(cat "$dir/info.nfo")
+  fi
+  
+  # Check for cover image
+  if [[ -f "$dir/cover.jpg" ]] || [[ -f "$dir/cover.png" ]]; then
+    metadata_ref["has_cover"]="true"
+  fi
+}
+
+# Function to extract metadata from embedded audio files
+extract_metadata_from_embedded() {
+  local dir="$1"
+  local -n metadata_ref="$2"
+  
+  # Find first audio file and extract metadata
+  local audio_file=$(find "$dir" -maxdepth 1 -type f \( -iname "*.m4b" -o -iname "*.m4a" -o -iname "*.mp3" -o -iname "*.flac" \) | head -1)
+  
+  if [[ -n "$audio_file" ]]; then
+    local embedded_metadata=$(extract_audio_metadata "$audio_file")
+    
+    # Extract common fields from embedded metadata
+    if [[ -n "$embedded_metadata" ]]; then
+      local title=$(echo "$embedded_metadata" | jq -r '.title // empty')
+      local author=$(echo "$embedded_metadata" | jq -r '.author // empty')
+      local narrator=$(echo "$embedded_metadata" | jq -r '.narrator // empty')
+      local year=$(echo "$embedded_metadata" | jq -r '.year // empty')
+      local publisher=$(echo "$embedded_metadata" | jq -r '.publisher // empty')
+      local genre=$(echo "$embedded_metadata" | jq -r '.genre // empty')
+      
+      [[ -n "$title" ]] && metadata_ref["embedded_title"]="$title"
+      [[ -n "$author" ]] && metadata_ref["embedded_author"]="$author"
+      [[ -n "$narrator" ]] && metadata_ref["embedded_narrator"]="$narrator"
+      [[ -n "$year" ]] && metadata_ref["embedded_year"]="$year"
+      [[ -n "$publisher" ]] && metadata_ref["embedded_publisher"]="$publisher"
+      [[ -n "$genre" ]] && metadata_ref["embedded_genre"]="$genre"
+    fi
+  fi
+}
+
 # === AI Bundle Processing ===
 function scan_input_and_prepare_ai_bundles() {
   DebugEcho "📦 scan_input_and_prepare_ai_bundles() started"
@@ -249,136 +336,44 @@ EOF
     echo "$metadata"
   }
 
-  # Process each entry
-  for entry in "$INPUT_PATH"/*; do
-    name="$(basename "$entry")"
-    DebugEcho "Processing entry: $entry"
-
-    # Skip system/working paths
-    [[ "$name" == "ai_bundles" ]] && continue
-    [[ "$name" == ".audiobook_tracking.db" ]] && continue
-
-    # Process if it's a directory or a supported audio file
-    if [[ -d "$entry" || "$entry" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
-      DebugEcho "🔍 Scanning candidate: $name"
-      
-      # Generate a unique ID for the book
-      id="$(echo "$name" | tr ' ' '_' | tr '/' '_')"
-      
-      # Initialize metadata object
-      declare -A metadata=(
-        ["id"]="$id"
-        ["path"]="$name"
-        ["folder_name"]="$name"
-        ["audio_files"]="[]"
-        ["metadata_files"]="[]"
-        ["file_count"]="0"
-        ["has_cover"]="false"
-        ["has_description"]="false"
-        ["has_nfo"]="false"
-        ["has_metadata"]="false"
-        ["audio_formats"]="[]"
-        ["total_duration"]="0"
-        ["file_sizes"]="{}"
-        ["naming_pattern"]="unknown"
-        ["audio_metadata"]="{}"
-      )
-
-      # If it's a directory, scan its contents
-      if [[ -d "$entry" ]]; then
-        # Initialize arrays for audio and metadata files
-        audio_files=()
-        metadata_files=()
-        audio_formats=()
-        declare -A file_sizes=()
-        total_duration=0
-        all_audio_metadata="{}"
-
-        # Scan directory contents
-        while IFS= read -r file; do
-          filename="$(basename "$file")"
-          
-          # Check for metadata files
-          case "$filename" in
-            cover.jpg|cover.png|cover.jpeg)
-              metadata["has_cover"]="true"
-              metadata_files+=("$filename")
-              ;;
-            desc.txt|description.txt|info.txt)
-              metadata["has_description"]="true"
-              metadata_files+=("$filename")
-              # Read first few lines of description
-              if [[ -f "$file" ]]; then
-                metadata["description_preview"]="$(head -n 3 "$file" | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-              fi
-              ;;
-            *.nfo)
-              metadata["has_nfo"]="true"
-              metadata_files+=("$filename")
-              # Read NFO content
-              if [[ -f "$file" ]]; then
-                metadata["nfo_content"]="$(cat "$file" | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-              fi
-              ;;
-          esac
-
-          # Check for audio files
-          if [[ "$file" =~ \.(m4b|mp3|flac|ogg|wav)$ ]]; then
-            audio_files+=("$filename")
-            format="${file##*.}"
-            audio_formats+=("$format")
-            
-            # Get file size
-            if [[ -f "$file" ]]; then
-              size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
-              file_sizes["$filename"]="$size"
-              
-              # Try to get duration using ffprobe if available
-              if command -v ffprobe &>/dev/null; then
-                duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
-                if [[ -n "$duration" ]]; then
-                  total_duration=$(echo "$total_duration + $duration" | bc)
-                fi
-                
-                # Extract audio metadata
-                file_metadata=$(extract_audio_metadata "$file")
-                if [[ "$file_metadata" != "{}" ]]; then
-                  metadata["has_metadata"]="true"
-                  # Merge metadata, preferring non-empty values
-                  all_audio_metadata=$(echo "$all_audio_metadata" "$file_metadata" | jq -s '.[0] * .[1]')
-                fi
-              fi
-            fi
-          fi
-        done < <(find "$entry" -type f)
-
-        # Update metadata with collected information
-        metadata["file_count"]="${#audio_files[@]}"
-        metadata["audio_files"]="$(printf '%s\n' "${audio_files[@]}" | jq -R . | jq -s .)"
-        metadata["metadata_files"]="$(printf '%s\n' "${metadata_files[@]}" | jq -R . | jq -s .)"
-        metadata["audio_formats"]="$(printf '%s\n' "${audio_formats[@]}" | jq -R . | jq -s .)"
-        metadata["total_duration"]="$total_duration"
-        metadata["file_sizes"]="$(printf '%s\n' "${!file_sizes[@]}" | jq -R . | jq -s .)"
-        metadata["audio_metadata"]="$all_audio_metadata"
-
-        # Analyze naming pattern
-        if [[ "$name" =~ ^[^-]+-[^-]+-[^-]+$ ]]; then
-          metadata["naming_pattern"]="author-series-title"
-        elif [[ "$name" =~ ^[^-]+-[^-]+$ ]]; then
-          metadata["naming_pattern"]="author-title"
-        elif [[ "$name" =~ \(Dramatized\)$ ]]; then
-          metadata["naming_pattern"]="author-title-dramatized"
+  # Scan input directory for audiobook folders and files
+  echo "🔍 Scanning input directory for audiobooks..."
+  
+  # Use find to recursively get all directories under INPUT_PATH
+  while IFS= read -r -d '' entry; do
+    # Skip the input directory itself and ai_bundles directory
+    if [[ "$entry" == "$INPUT_PATH" ]] || [[ "$entry" == *"/ai_bundles"* ]]; then
+      continue
+    fi
+    
+    # Check if this directory contains audio files
+    if [[ -d "$entry" ]] && has_audio_files "$entry"; then
+      # Check if any subdirectory (recursively) also contains audio files
+      has_audio_in_subdir=false
+      while IFS= read -r -d '' subdir; do
+        if [[ "$subdir" != "$entry" ]] && has_audio_files "$subdir"; then
+          has_audio_in_subdir=true
+          break
         fi
-
-        # Check for series indicators
-        if [[ "$name" =~ [Bb]ook[[:space:]]*[0-9]+ ]]; then
-          metadata["series_indicator"]="book_number"
-        elif [[ "$name" =~ [Pp]art[[:space:]]*[0-9]+ ]]; then
-          metadata["series_indicator"]="part_number"
-        elif [[ "$name" =~ [Vv]olume[[:space:]]*[0-9]+ ]]; then
-          metadata["series_indicator"]="volume_number"
-        fi
+      done < <(find "$entry" -type d -print0)
+      if $has_audio_in_subdir; then
+        DebugEcho "Skipping parent folder with audio: $entry"
+        continue
       fi
+      local id=$(basename "$entry")
+      DebugEcho "📚 Processing audiobook directory: $entry"
+      
+      # Initialize metadata array
+      declare -A metadata
+      
+      # Extract metadata from various sources
+      extract_metadata_from_folder "$entry" metadata
+      extract_metadata_from_files "$entry" metadata
+      extract_metadata_from_embedded "$entry" metadata
+      
+      # Add input_path as the full relative path from INPUT_PATH to the book's folder
+      rel_path="$(realpath --relative-to="$INPUT_PATH" "$entry" 2>/dev/null || python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$entry" "$INPUT_PATH")"
+      metadata["input_path"]="$rel_path"
 
       # Convert metadata to JSON and add to JSONL file
       json="{}"
@@ -391,13 +386,14 @@ EOF
           json="$(echo "$json" | jq --arg k "$key" --arg v "$value" '. + {($k): $v}')"
         fi
       done
-      echo "$json" >> "$AI_JSONL"
+      # Write as single-line JSONL (compact, not pretty-printed)
+      echo "$json" | jq -c . >> "$AI_JSONL"
       
-      DebugEcho "📚 Added ${id} to AI bundle with enhanced metadata"
+      DebugEcho "📚 Added ${id} to AI bundle with enhanced metadata and input_path: $rel_path"
     else
-      DebugEcho "Skipping unsupported file: $name"
+      DebugEcho "Skipping unsupported file: $entry"
     fi
-  done
+  done < <(find "$INPUT_PATH" -type d -print0)
 
   DebugEcho "✅ AI bundle created at ${AI_BUNDLE_PENDING}"
 }
