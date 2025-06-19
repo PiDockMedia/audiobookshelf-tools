@@ -27,6 +27,15 @@
 # 7. Test Mode
 #    - In test mode, the DB is destroyed with the input folder on --clean.
 #
+# 7. Manual Intervention Handling
+#    - Failed AI entries are moved to manual_intervention.jsonl for manual review and improvement.
+#    - Improved entries are resubmitted for AI analysis.
+#    - **CRITICAL: All command-line switches must be preserved and functional:**
+#      * --pause: Add pause points for manual intervention and debugging
+#      * --dry-run: Show what would be done without making changes  
+#      * --debug: Enable detailed logging
+#      * --input/--output: Specify input and output directories
+#
 # === End Dataflow & Tracking Logic ===
 set -euo pipefail
 IFS=$'\n\t'

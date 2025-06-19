@@ -32,6 +32,13 @@
 #
 # 8. Sync with Documentation
 #    - These steps are always kept in sync with tests/DATAFLOW_TEST.md. Any change to the script's logic must be reflected there.
+#    - **CRITICAL: All command-line switches must be preserved and functional:**
+#      * --clean: Remove test directory and exit (clean only)
+#      * --pause: Add pause points for manual intervention and AI response injection
+#      * --dry-run: Show what would be done without making changes
+#      * --debug: Enable detailed logging
+#      * --generate/--nogenerate: Control test data generation
+#      * --with-tts: Use text-to-speech for test audio generation
 #
 # === End Test Harness Dataflow & Logic ===
 
@@ -44,7 +51,7 @@ LOG_FILE="$LOG_DIR/test_run_$(date +%Y-%m-%d_%H%M%S).log"
 TEST_ENV="${ROOT_DIR}/.env"
 
 # Default values
-CLEAN=true
+CLEAN=false
 GENERATE=true
 WITH_TTS=false
 DRY_RUN=false
@@ -69,7 +76,8 @@ log_debug() {
 # === Pause Function ===
 pause() {
     if [ "$PAUSE" = true ]; then
-        read -p "Press Enter to continue..."
+        log_info "⏸️  PAUSE: Press Enter to continue..."
+        read -p ""
     fi
 }
 
@@ -285,6 +293,7 @@ fi
 if [ "$GENERATE" = true ]; then
     log_info "Generating test data..."
     generate_test_data
+    pause  # Pause after test data generation for inspection
 fi
 
 # === Load Environment ===
@@ -294,6 +303,9 @@ if [[ -f "${TEST_ENV}" ]]; then
 else
     log_info "No .env found, using defaults"
 fi
+
+# Pause before running organizer (allows for AI response injection)
+pause  # Pause before organization step for AI response injection
 
 # === Run Tests ===
 log_info "Running organize_audiobooks.sh..."

@@ -17,6 +17,11 @@
 4. Pause for AI Step (Optional)
    - If --pause is specified, pause after AI bundle generation for manual or automated AI response injection.
    - Allows for real or simulated AI integration.
+   - **CRITICAL: This pause functionality must be preserved!** It enables manual AI response injection and debugging.
+   - Pause points occur:
+     * After test data generation (for inspection)
+     * Before organization step (for AI response injection)
+     * Within organize_audiobooks.sh at key processing steps
 
 5. Organization Step
    - Run the main organizer script to process the AI responses and organize the test books into the output directory.
