@@ -7,27 +7,59 @@
 2. Ready for AI Scan
    - The script extracts all available metadata (embedded, folder, supporting files) and creates a JSONL entry for the book.
    - The book's status in the DB is updated to 'ready_for_ai'.
-   - An AI ready prompt.md file is also created which contains a comprehensive prompt to pass to the AI to process the uploaded JSONL file, analyze the information and gather or confirm additional information from Audiobook resources to identify or confirm existing and additional information to be used to populate the JSONL file that the AI generates.
-   - The AI delivers the JSONL with the analyzed data.
+   - A comprehensive prompt.md file is created containing instructions for the AI to analyze the JSONL file and extract additional metadata from audiobook resources.
+   - The JSONL file and prompt.md are placed in the input/ai_bundles/pending directory for manual AI processing.
 
 3. AI Scan Returned
-   - The AI created JSON is dropped in the input/ai_bundles directory to be processed on the next run.
-   - When an AI response is available (either simulated or real), the script updates the DB entry to 'ai_returned'.
-   - If the AI cannot determine metadata, the status is set to 'ai_failed', and the book is flagged for manual intervention.
+   - The AI processes the JSONL file and prompt.md, then returns a response JSONL file with analyzed metadata.
+   - The AI response JSONL is placed in the input/ai_bundles/pending directory (this is an external step).
+   - When an AI response is available, the script updates the DB entry to 'ai_returned'.
+   - If the AI cannot determine metadata or the confidence in the accuracy is too low, the status is set to 'ai_failed', and the book requires manual intervention.
 
 4. Organization
    - For books with 'ai_returned' status, the script organizes (copies) them to the OUTPUT_PATH using the AI metadata.
    - The DB entry is updated to 'organized'.
 
-5. Book Disappearance
+5. Handling AI Failures & Manual Intervention
+   - For books with 'ai_failed' status, the script moves their AI-analyzed entries from the returned JSONL to a separate manual intervention JSONL in input/ai_bundles/pending/.
+   - When the script runs, it checks the manual intervention JSONL for entries that have been improved and marked as ready for rescan.
+   - Improved entries are moved back to the AI READY JSONL for a new analysis attempt.
+
+6. Book Disappearance
    - If a book is removed from INPUT_PATH (external to this script), the script detects its absence and removes its entry from the DB.
 
-6. DB Persistence
+7. DB Persistence
    - The tracking DB lives in the INPUT_PATH and persists across runs.
 
 ---
 
 (These steps are always kept in sync with the comments at the top of organize_audiobooks.sh. Any change to the script's logic must be reflected here.)
+
+## Manual Intervention Flow Example & Diagram
+
+**Example:**
+- Book 'Moby Dick' is scanned and sent to AI, but the AI cannot determine the narrator with high confidence.
+- The script marks 'Moby Dick' as 'ai_failed' in the DB and moves its entry to manual_intervention.jsonl.
+- A user reviews and edits the entry in manual_intervention.jsonl, adding the correct narrator and marking it as ready for rescan.
+- On the next run, the script detects the improved entry, moves it back to the AI ready queue, and resubmits it for analysis.
+
+**Diagram:**
+
+```mermaid
+graph TD
+  A[Book appears in INPUT_PATH] --> B[Extract metadata & create JSONL]
+  B --> C[Send to AI (manual or automated)]
+  C -->|Success| D[AI response JSONL returned]
+  D -->|High confidence| E[Organize & mark as organized]
+  D -->|Low confidence or fail| F[Move to manual_intervention.jsonl]
+  F --> G[User edits & marks ready for rescan]
+  G --> H[Move back to AI ready queue]
+  H --> C
+  E --> I[Book disappears from INPUT_PATH]
+  I --> J[Remove from DB]
+```
+
+---
 
 ## Input Directory Structure
 - **User provides an input directory** containing unorganized audiobook folders and files. These may include:

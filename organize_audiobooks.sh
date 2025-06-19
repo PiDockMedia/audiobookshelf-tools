@@ -634,6 +634,45 @@ process_all_ai_responses() {
     return $error_count
 }
 
+# === Manual Intervention Handling ===
+# Move failed AI entries to manual_intervention.jsonl and resubmit improved entries
+handle_manual_intervention() {
+  local ai_bundles_dir="$INPUT_PATH/ai_bundles/pending"
+  local ai_response_jsonl="$ai_bundles_dir/ai_input.jsonl"
+  local manual_jsonl="$ai_bundles_dir/manual_intervention.jsonl"
+  local tmp_jsonl
+
+  # Ensure manual_intervention.jsonl exists
+  touch "$manual_jsonl"
+
+  # 1. Move failed entries from AI response JSONL to manual_intervention.jsonl
+  tmp_jsonl=$(mktemp)
+  : > "$tmp_jsonl"
+  while IFS= read -r line; do
+    if echo "$line" | jq -e '.status == "ai_failed"' >/dev/null 2>&1; then
+      echo "$line" >> "$manual_jsonl"
+      # Optionally update DB status here if needed
+    else
+      echo "$line" >> "$tmp_jsonl"
+    fi
+  done < "$ai_response_jsonl"
+  mv "$tmp_jsonl" "$ai_response_jsonl"
+
+  # 2. Move improved entries (manual_status == "ready") back to AI-ready JSONL
+  tmp_jsonl=$(mktemp)
+  : > "$tmp_jsonl"
+  while IFS= read -r line; do
+    if echo "$line" | jq -e '.manual_status == "ready"' >/dev/null 2>&1; then
+      # Remove manual_status field before resubmitting
+      echo "$line" | jq 'del(.manual_status)' >> "$ai_response_jsonl"
+      # Optionally update DB status here if needed
+    else
+      echo "$line" >> "$tmp_jsonl"
+    fi
+  done < "$manual_jsonl"
+  mv "$tmp_jsonl" "$manual_jsonl"
+}
+
 # === Main Execution ===
 print_divider
 DebugEcho "📚 BEGIN organize_audiobooks.sh"
@@ -658,6 +697,9 @@ if [[ "${INGEST_MODE:-false}" == "true" ]]; then
   ingest_metadata_file "${INGEST_FILE:-}"
   pause
 fi
+
+# Call handle_manual_intervention at the start of main execution
+handle_manual_intervention
 
 if [ "$DRY_RUN" = false ]; then
     # Process AI responses and organize files
