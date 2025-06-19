@@ -271,17 +271,15 @@ log_info "PAUSE: $PAUSE"
 
 # Clean test directory
 if [ "$CLEAN" = true ]; then
-    log_info "Cleaning old test data..."
-    rm -rf "$OUTDIR"
-    mkdir -p "$OUTDIR/input"
-    mkdir -p "$OUTDIR/output"
-    
-    # If --clean is the only flag specified, exit after cleaning
-    if [ "$GENERATE" != true ] && [ "$DRY_RUN" != true ] && [ "$PAUSE" != true ] && [ "$DEBUG" != true ]; then
-        log_info "✅ Clean completed successfully"
-        log_info "🏁 END run_all_tests.sh"
-        exit 0
+    if [ "$DRY_RUN" = true ]; then
+        log_info "Would clean old test data: $OUTDIR"
+    else
+        log_info "Cleaning old test data..."
+        rm -rf "$OUTDIR"
     fi
+    log_info "✅ Clean completed successfully"
+    log_info "🏁 END run_all_tests.sh"
+    exit 0
 fi
 
 if [ "$GENERATE" = true ]; then
