@@ -95,8 +95,18 @@ function _log_msg() {
 # === Level Check ===
 function _should_log() {
   local level="${1:-info}"
-  local requested="${LOG_LEVELS[$level]:-${LOG_LEVELS[info]}}"
-  local current="${LOG_LEVELS[${LOG_LEVEL:-info}]:-${LOG_LEVELS[info]}}"
+  local requested
+  local current
+  if [[ -v LOG_LEVELS[$level] ]]; then
+    requested="${LOG_LEVELS[$level]}"
+  else
+    requested="${LOG_LEVELS[info]}"
+  fi
+  if [[ -v LOG_LEVELS[${LOG_LEVEL:-info}] ]]; then
+    current="${LOG_LEVELS[${LOG_LEVEL:-info}]}"
+  else
+    current="${LOG_LEVELS[info]}"
+  fi
   [[ $requested -ge $current ]]
 }
 
@@ -345,9 +355,6 @@ EOF
     echo "$metadata"
   }
 
-  # Scan input directory for audiobook folders and files
-  echo "🔍 Scanning input directory for audiobooks..."
-  
   # Use find to recursively get all directories under INPUT_PATH
   while IFS= read -r -d '' entry; do
     # Skip the input directory itself and ai_bundles directory
@@ -355,27 +362,48 @@ EOF
       continue
     fi
     
-    # Check if this directory contains audio files
-    if [[ -d "$entry" ]] && has_audio_files "$entry"; then
-      # Check if any subdirectory (recursively) also contains audio files
-      has_audio_in_subdir=false
-      while IFS= read -r -d '' subdir; do
-        if [[ "$subdir" != "$entry" ]] && has_audio_files "$subdir"; then
-          has_audio_in_subdir=true
-          break
-        fi
-      done < <(find "$entry" -type d -print0)
-      if $has_audio_in_subdir; then
-        DebugEcho "Skipping parent folder with audio: $entry"
+    # Check if this directory contains audio files OR is a multi-disc book folder
+    local is_audio_folder=false
+    local is_multi_disc_folder=false
+    
+    if [[ -d "$entry" ]]; then
+      if has_audio_files "$entry"; then
+        is_audio_folder=true
+      else
+        # Check if this is a multi-disc book folder (contains disc subfolders)
+        while IFS= read -r -d '' subdir; do
+          if [[ "$subdir" != "$entry" ]]; then
+            local subdir_name=$(basename "$subdir")
+            if [[ "$subdir_name" =~ ^(Disc|CD|Part|Volume)\ [0-9]+$ ]] || [[ "$subdir_name" =~ ^[0-9]+$ ]]; then
+              if has_audio_files "$subdir"; then
+                is_multi_disc_folder=true
+                break
+              fi
+            fi
+          fi
+        done < <(find "$entry" -maxdepth 1 -type d -print0)
+      fi
+    fi
+    
+    if $is_audio_folder || $is_multi_disc_folder; then
+      # Skip disc folders - let AI handle multi-disc books from parent folder
+      local dir_name=$(basename "$entry")
+      if [[ "$dir_name" =~ ^(Disc|CD|Part|Volume)\ [0-9]+$ ]] || [[ "$dir_name" =~ ^[0-9]+$ ]]; then
+        DebugEcho "Skipping disc folder: $entry (AI will handle from parent)"
         continue
       fi
+      
       local id=$(basename "$entry")
-      DebugEcho "📚 Processing audiobook directory: $entry"
+      if $is_multi_disc_folder; then
+        DebugEcho "📚 Processing multi-disc book directory: $entry"
+      else
+        DebugEcho "📚 Processing audiobook directory: $entry"
+      fi
       
       # Initialize metadata array
       declare -A metadata
       
-      # Extract metadata from various sources
+      # Extract basic metadata from various sources (light touch)
       extract_metadata_from_folder "$entry" metadata
       extract_metadata_from_files "$entry" metadata
       extract_metadata_from_embedded "$entry" metadata

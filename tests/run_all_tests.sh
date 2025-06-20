@@ -48,7 +48,7 @@ OUTDIR="${ROOT_DIR}/tests/test-audiobooks"
 LOG_DIR="$(dirname "$0")/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/test_run_$(date +%Y-%m-%d_%H%M%S).log"
-TEST_ENV="${ROOT_DIR}/.env"
+TEST_ENV="${ROOT_DIR}/tests/test-env"
 
 # Default values
 CLEAN=false
@@ -298,10 +298,10 @@ fi
 
 # === Load Environment ===
 if [[ -f "${TEST_ENV}" ]]; then
-    log_info "Using .env: ${TEST_ENV}"
+    log_info "Using test-env: ${TEST_ENV}"
     source "${TEST_ENV}"
 else
-    log_info "No .env found, using defaults"
+    log_info "No test-env found, using defaults"
 fi
 
 # Pause before running organizer (allows for AI response injection)
@@ -311,9 +311,9 @@ pause  # Pause before organization step for AI response injection
 log_info "Running organize_audiobooks.sh..."
 if [ "$DRY_RUN" = true ]; then
     log_info "Running in dry-run mode..."
-    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run
+    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
 else
-    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output"
+    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
 fi
 
 # === Verify Results ===
