@@ -57,6 +57,7 @@ WITH_TTS=false
 DRY_RUN=false
 PAUSE=false
 DEBUG=false
+TRACE=false
 
 # === Logging Functions ===
 log_info() {
@@ -96,6 +97,7 @@ Options:
   --dry-run       Test without making changes
   --pause         Add pause points for verification
   --debug         Enable debug output
+  --trace         Run organizer with bash -x and log full trace to logs/
 
 Environment Variables:
   AUDIOBOOKSHELF_NAME_DETAIL  Set naming detail level (minimal/standard/full)
@@ -141,11 +143,16 @@ while [[ $# -gt 0 ]]; do
             DEBUG=true
             shift
             ;;
+        --trace)
+            TRACE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             show_help
             ;;
     esac
+    shift
 done
 
 # === Test Data Generation Functions ===
@@ -309,11 +316,20 @@ pause  # Pause before organization step for AI response injection
 
 # === Run Tests ===
 log_info "Running organize_audiobooks.sh..."
-if [ "$DRY_RUN" = true ]; then
-    log_info "Running in dry-run mode..."
-    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
+if [ "$TRACE" = true ]; then
+    TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
+    log_info "Tracing organizer to $TRACE_LOG"
+    if [ "$DRY_RUN" = true ]; then
+        bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
+    else
+        bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
+    fi
 else
-    "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
+    if [ "$DRY_RUN" = true ]; then
+        "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
+    else
+        "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
+    fi
 fi
 
 # === Verify Results ===
