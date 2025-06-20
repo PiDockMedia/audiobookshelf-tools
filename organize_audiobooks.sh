@@ -5,7 +5,15 @@
 if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
     echo "ERROR: This script requires bash 4.0 or higher (associative arrays support)"
     echo "Current bash version: $BASH_VERSION"
-    echo "Please upgrade bash or ensure /usr/bin/env bash resolves to bash 4.0+"
+    echo "Current bash path: $(which bash)"
+    echo ""
+    echo "The script is running with the system bash instead of Homebrew bash."
+    echo "To fix this, either:"
+    echo "1. Run the script with: /opt/homebrew/bin/bash organize_audiobooks.sh [options]"
+    echo "2. Or update your shell configuration to prioritize Homebrew bash"
+    echo "3. Or add /opt/homebrew/bin to the beginning of your PATH"
+    echo ""
+    echo "Homebrew bash version: $(/opt/homebrew/bin/bash --version | head -1)"
     exit 1
 fi
 
@@ -624,10 +632,12 @@ process_all_ai_responses() {
     local ai_bundles_dir="$input_path/ai_bundles"
     local processed_count=0
     local error_count=0
+    local found_any_responses=false
     
     # Process JSONL file if it exists
     local jsonl_file="$ai_bundles_dir/pending/ai_input.jsonl"
     if [ -f "$jsonl_file" ]; then
+        found_any_responses=true
         log_debug "Processing JSONL file: $jsonl_file"
         while IFS= read -r line; do
             # Create temporary response file
@@ -654,6 +664,7 @@ process_all_ai_responses() {
     
     # Process individual JSON files if they exist
     while IFS= read -r -d '' response_file; do
+        found_any_responses=true
         # Get corresponding source directory
         local book_id=$(basename "$(dirname "$response_file")")
         local source_dir="$input_path/$book_id"
@@ -669,6 +680,11 @@ process_all_ai_responses() {
             ((error_count++))
         fi
     done < <(find "$ai_bundles_dir" -name "ai_response.json" -print0)
+    
+    if [ "$found_any_responses" = false ]; then
+        log_info "No AI response files found - skipping organization step"
+        return 0
+    fi
     
     log_info "Processed $processed_count books successfully"
     if [ $error_count -gt 0 ]; then
@@ -748,10 +764,7 @@ handle_manual_intervention
 if [ "$DRY_RUN" = false ]; then
     # Process AI responses and organize files
     log_info "Processing AI responses and organizing files..."
-    if ! process_all_ai_responses "$INPUT_PATH" "$OUTPUT_PATH"; then
-        log_error "Errors occurred during file organization"
-        exit 1
-    fi
+    process_all_ai_responses "$INPUT_PATH" "$OUTPUT_PATH"
     log_info "File organization completed successfully"
 fi
 

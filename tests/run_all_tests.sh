@@ -16,6 +16,8 @@
 #
 # 3. AI Bundle Generation
 #    - The script generates the AI bundle (ai_input.jsonl and prompt.md) in the input/ai_bundles/pending directory as in production.
+#    - By default, the script generates simulated AI responses for testing purposes.
+#    - Use --nosimulate to skip AI response generation and allow manual AI response injection.
 #    - For full-pipeline tests, let the script generate this file naturally.
 #    - For organization-only tests, you may inject a simulated AI response file to skip the AI analysis step.
 #
@@ -43,6 +45,7 @@
 #      * --debug: Enable detailed logging
 #      * --generate/--nogenerate: Control test data generation
 #      * --with-tts: Use text-to-speech for test audio generation
+#      * --nosimulate: Skip generating simulated AI responses
 #
 # === End Test Harness Dataflow & Logic ===
 
@@ -62,6 +65,7 @@ DRY_RUN=false
 PAUSE=false
 DEBUG=false
 TRACE=false
+SIMULATE_AI=true
 
 # === Logging Functions ===
 log_info() {
@@ -102,6 +106,7 @@ Options:
   --pause         Add pause points for verification
   --debug         Enable debug output
   --trace         Run organizer with bash -x and log full trace to logs/
+  --nosimulate    Skip generating simulated AI responses (for manual AI testing)
 
 Environment Variables:
   AUDIOBOOKSHELF_NAME_DETAIL  Set naming detail level (minimal/standard/full)
@@ -119,39 +124,33 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clean)
             CLEAN=true
-            shift
             ;;
         --noclean)
             CLEAN=false
-            shift
             ;;
         --generate)
             GENERATE=true
-            shift
             ;;
         --nogenerate)
             GENERATE=false
-            shift
             ;;
         --with-tts)
             WITH_TTS=true
-            shift
             ;;
         --dry-run)
             DRY_RUN=true
-            shift
             ;;
         --pause)
             PAUSE=true
-            shift
             ;;
         --debug)
             DEBUG=true
-            shift
             ;;
         --trace)
             TRACE=true
-            shift
+            ;;
+        --nosimulate)
+            SIMULATE_AI=false
             ;;
         *)
             echo "Unknown option: $1"
@@ -269,17 +268,23 @@ generate_test_data() {
         "The Art of War" "Sun Tzu" "Sun Tzu" "Lionel Giles" "LibriVox" "1910" "Philosophy" "Test comment" "The Art of War" "" ""
     
     log_info "Test data generated successfully in ${OUTDIR}"
-    # === Force overwrite a valid simulated AI bundle for test data (single-line JSONL) ===
-    local ai_bundle_dir="${OUTDIR}/input/ai_bundles/pending"
-    mkdir -p "$ai_bundle_dir"
-    local ai_jsonl="$ai_bundle_dir/ai_input.jsonl"
-    : > "$ai_jsonl"
-    echo '{"input_path": "Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}", "title": "Pride and Prejudice", "author": "Jane Austen", "narrator": "Elizabeth Klett", "year": 1813, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Novel"}' >> "$ai_jsonl"
-    echo '{"input_path": "Doyle, Arthur Conan/Sherlock Holmes/Book 1 - 1892 - The Adventures of Sherlock Holmes {David Clarke}", "title": "The Adventures of Sherlock Holmes", "author": "Arthur Conan Doyle", "narrator": "David Clarke", "year": 1892, "series": "Sherlock Holmes", "series_index": 1, "publisher": "LibriVox", "genre": "Detective"}' >> "$ai_jsonl"
-    echo '{"input_path": "Melville, Herman/1851 - Moby Dick {Stewart Wills}/Disc 1", "title": "Moby Dick", "author": "Herman Melville", "narrator": "Stewart Wills", "year": 1851, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Adventure"}' >> "$ai_jsonl"
-    echo '{"input_path": "Aesop/Aesop'\''s Fables", "title": "Aesop'\''s Fables", "author": "Aesop", "narrator": "Various", "year": 1912, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Fable"}' >> "$ai_jsonl"
-    echo '{"input_path": "Sun, Tzu/The Art of War/1910 - The Art of War {Lionel Giles}", "title": "The Art of War", "author": "Sun Tzu", "narrator": "Lionel Giles", "year": 1910, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Philosophy"}' >> "$ai_jsonl"
-    log_info "Simulated AI bundle (single-line JSONL) generated at $ai_jsonl"
+    
+    # Generate simulated AI responses if enabled
+    if [ "$SIMULATE_AI" = true ]; then
+        # === Force overwrite a valid simulated AI bundle for test data (single-line JSONL) ===
+        local ai_bundle_dir="${OUTDIR}/input/ai_bundles/pending"
+        mkdir -p "$ai_bundle_dir"
+        local ai_jsonl="$ai_bundle_dir/ai_input.jsonl"
+        : > "$ai_jsonl"
+        echo '{"input_path": "Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}", "title": "Pride and Prejudice", "author": "Jane Austen", "narrator": "Elizabeth Klett", "year": 1813, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Novel"}' >> "$ai_jsonl"
+        echo '{"input_path": "Doyle, Arthur Conan/Sherlock Holmes/Book 1 - 1892 - The Adventures of Sherlock Holmes {David Clarke}", "title": "The Adventures of Sherlock Holmes", "author": "Arthur Conan Doyle", "narrator": "David Clarke", "year": 1892, "series": "Sherlock Holmes", "series_index": 1, "publisher": "LibriVox", "genre": "Detective"}' >> "$ai_jsonl"
+        echo '{"input_path": "Melville, Herman/1851 - Moby Dick {Stewart Wills}/Disc 1", "title": "Moby Dick", "author": "Herman Melville", "narrator": "Stewart Wills", "year": 1851, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Adventure"}' >> "$ai_jsonl"
+        echo '{"input_path": "Aesop/Aesop'\''s Fables", "title": "Aesop'\''s Fables", "author": "Aesop", "narrator": "Various", "year": 1912, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Fable"}' >> "$ai_jsonl"
+        echo '{"input_path": "Sun, Tzu/The Art of War/1910 - The Art of War {Lionel Giles}", "title": "The Art of War", "author": "Sun Tzu", "narrator": "Lionel Giles", "year": 1910, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Philosophy"}' >> "$ai_jsonl"
+        log_info "Simulated AI bundle (single-line JSONL) generated at $ai_jsonl"
+    else
+        log_info "Skipping AI response generation (--nosimulate flag used)"
+    fi
 }
 
 # === Main Test Flow ===
@@ -289,6 +294,7 @@ log_info "ROOT_DIR: $ROOT_DIR"
 log_info "OUTDIR: $OUTDIR"
 log_info "DRY_RUN: $DRY_RUN"
 log_info "PAUSE: $PAUSE"
+log_info "SIMULATE_AI: $SIMULATE_AI"
 
 # Clean test directory
 if [ "$CLEAN" = true ]; then
@@ -326,15 +332,15 @@ if [ "$TRACE" = true ]; then
     TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        /usr/bin/env bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
+        /opt/homebrew/bin/bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
     else
-        /usr/bin/env bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
+        /opt/homebrew/bin/bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
     fi
 else
     if [ "$DRY_RUN" = true ]; then
-        "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
     else
-        "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
     fi
 fi
 
