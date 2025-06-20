@@ -340,6 +340,8 @@ EOF
       )
       
       for tag in "${tags[@]}"; do
+        # Always initialize value to prevent unbound variable errors with "set -u"
+        local value=""
         # Try both format_tags and tags for better compatibility
         value=$(ffprobe -v error -show_entries format_tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
         if [[ -z "$value" ]]; then
