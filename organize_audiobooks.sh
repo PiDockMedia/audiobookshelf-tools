@@ -68,12 +68,11 @@ LOG_LEVEL="${LOG_LEVEL:-info}"      # debug | info | warn | error
 LOG_FILE="${LOG_FILE:-}"            # optional path to log file
 
 # === Level Priorities for filtering ===
-declare -A LOG_LEVELS=(
-  [debug]=0
-  [info]=1
-  [warn]=2
-  [error]=3
-)
+declare -A LOG_LEVELS
+LOG_LEVELS[debug]=0
+LOG_LEVELS[info]=1
+LOG_LEVELS[warn]=2
+LOG_LEVELS[error]=3
 
 # === Internal log formatter ===
 function _log_msg() {
@@ -97,12 +96,12 @@ function _should_log() {
   local level="${1:-info}"
   local requested
   local current
-  if [[ -v LOG_LEVELS[$level] ]]; then
+  if [[ -n "${LOG_LEVELS[$level]+set}" ]]; then
     requested="${LOG_LEVELS[$level]}"
   else
     requested="${LOG_LEVELS[info]}"
   fi
-  if [[ -v LOG_LEVELS[${LOG_LEVEL:-info}] ]]; then
+  if [[ -n "${LOG_LEVELS[${LOG_LEVEL:-info}]+set}" ]]; then
     current="${LOG_LEVELS[${LOG_LEVEL:-info}]}"
   else
     current="${LOG_LEVELS[info]}"
