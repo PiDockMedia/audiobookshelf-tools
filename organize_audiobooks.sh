@@ -428,13 +428,13 @@ EOF
       extract_metadata_from_embedded "$entry" metadata
       
       # Add input_path as the full relative path from INPUT_PATH to the book's folder
-      rel_path="$(realpath --relative-to="$INPUT_PATH" "$entry" 2>/dev/null || python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$entry" "$INPUT_PATH")"
+      local rel_path="$(realpath --relative-to="$INPUT_PATH" "$entry" 2>/dev/null || python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$entry" "$INPUT_PATH")"
       metadata["input_path"]="$rel_path"
 
       # Convert metadata to JSON and add to JSONL file
-      json="{}"
+      local json="{}"
       for key in "${!metadata[@]}"; do
-        value="${metadata[$key]}"
+        local value="${metadata[$key]}"
         # Handle arrays and objects specially
         if [[ "$value" == "["* ]] || [[ "$value" == "{"* ]]; then
           json="$(echo "$json" | jq --arg k "$key" --argjson v "$value" '. + {($k): $v}')"
@@ -646,14 +646,15 @@ process_all_ai_responses() {
             
             # Extract source directory from input_path in JSON
             local source_dir=$(echo "$line" | jq -r '.input_path')
-            if [ -d "$source_dir" ]; then
-                if process_ai_response_and_organize "$temp_response" "$source_dir" "$output_path"; then
+            local full_source_dir="$input_path/$source_dir"
+            if [ -d "$full_source_dir" ]; then
+                if process_ai_response_and_organize "$temp_response" "$full_source_dir" "$output_path"; then
                     ((processed_count++))
                 else
                     ((error_count++))
                 fi
             else
-                log_error "Source directory not found: $source_dir"
+                log_error "Source directory not found: $full_source_dir"
                 ((error_count++))
             fi
             
@@ -702,6 +703,12 @@ handle_manual_intervention() {
   local manual_jsonl="$ai_bundles_dir/manual_intervention.jsonl"
   local tmp_jsonl
 
+  # Only process if the AI response file exists
+  if [ ! -f "$ai_response_jsonl" ]; then
+    log_debug "No AI response file found for manual intervention processing"
+    return 0
+  fi
+
   # Ensure manual_intervention.jsonl exists
   touch "$manual_jsonl"
 
@@ -709,6 +716,11 @@ handle_manual_intervention() {
   tmp_jsonl=$(mktemp)
   : > "$tmp_jsonl"
   while IFS= read -r line; do
+    # Skip empty lines
+    if [ -z "$line" ]; then
+      continue
+    fi
+    # Only process lines that have the expected status field
     if echo "$line" | jq -e '.status == "ai_failed"' >/dev/null 2>&1; then
       echo "$line" >> "$manual_jsonl"
       # Optionally update DB status here if needed
@@ -719,18 +731,25 @@ handle_manual_intervention() {
   mv "$tmp_jsonl" "$ai_response_jsonl"
 
   # 2. Move improved entries (manual_status == "ready") back to AI-ready JSONL
-  tmp_jsonl=$(mktemp)
-  : > "$tmp_jsonl"
-  while IFS= read -r line; do
-    if echo "$line" | jq -e '.manual_status == "ready"' >/dev/null 2>&1; then
-      # Remove manual_status field before resubmitting
-      echo "$line" | jq 'del(.manual_status)' >> "$ai_response_jsonl"
-      # Optionally update DB status here if needed
-    else
-      echo "$line" >> "$tmp_jsonl"
-    fi
-  done < "$manual_jsonl"
-  mv "$tmp_jsonl" "$manual_jsonl"
+  if [ -s "$manual_jsonl" ]; then
+    tmp_jsonl=$(mktemp)
+    : > "$tmp_jsonl"
+    while IFS= read -r line; do
+      # Skip empty lines
+      if [ -z "$line" ]; then
+        continue
+      fi
+      # Only process lines that have the expected manual_status field
+      if echo "$line" | jq -e '.manual_status == "ready"' >/dev/null 2>&1; then
+        # Remove manual_status field before resubmitting
+        echo "$line" | jq 'del(.manual_status)' >> "$ai_response_jsonl"
+        # Optionally update DB status here if needed
+      else
+        echo "$line" >> "$tmp_jsonl"
+      fi
+    done < "$manual_jsonl"
+    mv "$tmp_jsonl" "$manual_jsonl"
+  fi
 }
 
 # === Main Execution ===
@@ -769,3 +788,4 @@ if [ "$DRY_RUN" = false ]; then
 fi
 
 DebugEcho "🏁 END organize_audiobooks.sh"
+exit 0
