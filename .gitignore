@@ -163,3 +163,4 @@ config.local
 .localenv
 *.secrets
 tests/test-audiobooks
+.pathset
