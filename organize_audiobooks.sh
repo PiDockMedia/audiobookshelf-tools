@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+
+# === Bash Version Check ===
+# Ensure we have bash 4.0+ for associative array support
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    echo "ERROR: This script requires bash 4.0 or higher (associative arrays support)"
+    echo "Current bash version: $BASH_VERSION"
+    echo "Please upgrade bash or ensure /usr/bin/env bash resolves to bash 4.0+"
+    exit 1
+fi
+
 #
 # === AI Audiobook Organizer: Full Dataflow & Tracking Logic ===
 #
@@ -228,6 +238,49 @@ extract_metadata_from_embedded() {
   fi
 }
 
+# Function to extract metadata using ffprobe
+extract_audio_metadata() {
+  local file="$1"
+  local metadata="{}"
+  
+  if command -v ffprobe &>/dev/null; then
+    # Extract common metadata tags
+    local tags=(
+      "title"
+      "artist"
+      "author"
+      "album"
+      "album_artist"
+      "composer"
+      "narrator"
+      "publisher"
+      "date"
+      "year"
+      "track"
+      "disc"
+      "series"
+      "series_index"
+      "genre"
+      "comment"
+    )
+    
+    for tag in "${tags[@]}"; do
+      # Always initialize value to prevent unbound variable errors with "set -u"
+      local value=""
+      # Try both format_tags and tags for better compatibility
+      value=$(ffprobe -v error -show_entries format_tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+      if [[ -z "$value" ]]; then
+        value=$(ffprobe -v error -show_entries tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+      fi
+      if [[ -n "$value" ]]; then
+        metadata=$(echo "$metadata" | jq --arg k "$tag" --arg v "$value" '. + {($k): $v}')
+      fi
+    done
+  fi
+  
+  echo "$metadata"
+}
+
 # === AI Bundle Processing ===
 function scan_input_and_prepare_ai_bundles() {
   DebugEcho "📦 scan_input_and_prepare_ai_bundles() started"
@@ -312,49 +365,6 @@ For each field, prioritize:
 
 If information is missing or conflicting, explain your reasoning in the confidence field.
 EOF
-
-  # Function to extract metadata using ffprobe
-  extract_audio_metadata() {
-    local file="$1"
-    local metadata="{}"
-    
-    if command -v ffprobe &>/dev/null; then
-      # Extract common metadata tags
-      local tags=(
-        "title"
-        "artist"
-        "author"
-        "album"
-        "album_artist"
-        "composer"
-        "narrator"
-        "publisher"
-        "date"
-        "year"
-        "track"
-        "disc"
-        "series"
-        "series_index"
-        "genre"
-        "comment"
-      )
-      
-      for tag in "${tags[@]}"; do
-        # Always initialize value to prevent unbound variable errors with "set -u"
-        local value=""
-        # Try both format_tags and tags for better compatibility
-        value=$(ffprobe -v error -show_entries format_tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
-        if [[ -z "$value" ]]; then
-          value=$(ffprobe -v error -show_entries tags="$tag" -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
-        fi
-        if [[ -n "$value" ]]; then
-          metadata=$(echo "$metadata" | jq --arg k "$tag" --arg v "$value" '. + {($k): $v}')
-        fi
-      done
-    fi
-    
-    echo "$metadata"
-  }
 
   # Use find to recursively get all directories under INPUT_PATH
   while IFS= read -r -d '' entry; do

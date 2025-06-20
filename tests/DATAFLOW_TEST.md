@@ -1,5 +1,7 @@
 # DATAFLOW: Test Harness for AI Audiobook Organizer (always in sync with run_all_tests.sh)
 
+**NOTE:** Always run the test harness from the project root as './tests/run_all_tests.sh'. Running from any other directory may cause errors or incorrect test data placement.
+
 1. Clean Test Environment
    - If --clean is specified, remove the entire test output directory at tests/test-audiobooks.
 

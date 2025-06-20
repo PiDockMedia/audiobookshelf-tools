@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# === USAGE: Run this script from the project root ===
+#   ./tests/run_all_tests.sh [options]
+# Running from any other directory may cause errors or incorrect test data placement.
 #
 # === Test Harness Dataflow & Logic (run_all_tests.sh) ===
 #
@@ -85,7 +89,7 @@ pause() {
 # === Help Text ===
 show_help() {
     cat << EOF
-Usage: ./run_all_tests.sh [options]
+Usage: ./tests/run_all_tests.sh [options]
 
 Options:
   --help          Show this help message
@@ -101,6 +105,8 @@ Options:
 
 Environment Variables:
   AUDIOBOOKSHELF_NAME_DETAIL  Set naming detail level (minimal/standard/full)
+
+NOTE: Always run this script from the project root as './tests/run_all_tests.sh'.
 EOF
     exit 0
 }
@@ -320,9 +326,9 @@ if [ "$TRACE" = true ]; then
     TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
+        /usr/bin/env bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
     else
-        bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
+        /usr/bin/env bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
     fi
 else
     if [ "$DRY_RUN" = true ]; then

@@ -141,3 +141,5 @@ graph TD
 - Input: Unorganized audiobook folders/files
 - Output: Organized, metadata-rich audiobook library, ready for Audiobookshelf or similar platforms
 - Key steps: Metadata extraction → AI analysis → File organization
+
+**Note:** The test harness (run_all_tests.sh) must be run from the project root as './tests/run_all_tests.sh' for correct operation. Running from any other directory may cause errors or incorrect test data placement.
