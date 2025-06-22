@@ -364,19 +364,22 @@ Please return JSON metadata in this format:
   "series": "Optional Series",
   "series_index": 1,
   "narrator": "Optional Narrator",
+  "year": 1813,
   "confidence": {
     "author": "high|medium|low",
     "title": "high|medium|low",
     "series": "high|medium|low",
     "series_index": "high|medium|low",
-    "narrator": "high|medium|low"
+    "narrator": "high|medium|low",
+    "year": "high|medium|low"
   },
   "sources": {
     "author": ["embedded_metadata", "folder_name", "description"],
     "title": ["embedded_metadata", "folder_name", "description"],
     "series": ["embedded_metadata", "folder_name", "description"],
     "series_index": ["embedded_metadata", "folder_name", "description"],
-    "narrator": ["embedded_metadata", "folder_name", "description"]
+    "narrator": ["embedded_metadata", "folder_name", "description"],
+    "year": ["embedded_metadata", "folder_name", "description"]
   }
 }
 
