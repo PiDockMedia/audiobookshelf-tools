@@ -328,24 +328,27 @@ pause  # Pause before organization step for AI response injection
 
 # === Run Tests ===
 log_info "Running organize_audiobooks.sh..."
+
 if [ "$TRACE" = true ]; then
     TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        /opt/homebrew/bin/bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
     else
-        /opt/homebrew/bin/bash -x "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
     fi
+    organizer_exit_code=$?
 else
     if [ "$DRY_RUN" = true ]; then
-        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
     else
-        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
     fi
+    organizer_exit_code=$?
 fi
 
 # === Verify Results ===
-if [ $? -eq 0 ]; then
+if [ $organizer_exit_code -eq 0 ]; then
     log_info "✅ Test run completed successfully"
 else
     log_error "❌ Test run failed"

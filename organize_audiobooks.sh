@@ -55,7 +55,8 @@ fi
 #      * --input/--output: Specify input and output directories
 #
 # === End Dataflow & Tracking Logic ===
-set -euo pipefail
+# Temporarily disable set -e for more resilient error handling
+set -uo pipefail
 IFS=$'\n\t'
 
 # === Set ROOT_DIR to project root ===
@@ -161,6 +162,18 @@ function init_db() {
 
 # === Helper Functions ===
 
+# Function to safely get array value (prevents unbound variable errors)
+safe_array_get() {
+  local array_name="$1"
+  local key="$2"
+  local -n arr="$array_name"
+  if [[ -n "${arr[$key]:-}" ]]; then
+    echo "${arr[$key]}"
+  else
+    echo ""
+  fi
+}
+
 # Function to check if a directory contains audio files
 has_audio_files() {
   local dir="$1"
@@ -181,6 +194,15 @@ extract_metadata_from_folder() {
   local dir="$1"
   local -n metadata_ref="$2"
   local folder_name=$(basename "$dir")
+  
+  # Extract author from parent directory name (e.g., "Austen, Jane")
+  local parent_dir=$(dirname "$dir")
+  local author_name=$(basename "$parent_dir")
+  if [[ "$author_name" =~ ^([^,]+),\s*([^,]+)$ ]]; then
+    metadata_ref["author"]="$author_name"
+  elif [[ -n "$author_name" ]]; then
+    metadata_ref["author"]="$author_name"
+  fi
   
   # Extract year from folder name (e.g., "1813 - Pride and Prejudice")
   if [[ "$folder_name" =~ ([0-9]{4})\ -\ (.+) ]]; then
@@ -433,15 +455,72 @@ EOF
 
       # Convert metadata to JSON and add to JSONL file
       local json="{}"
-      for key in "${!metadata[@]}"; do
-        local value="${metadata[$key]}"
-        # Handle arrays and objects specially
-        if [[ "$value" == "["* ]] || [[ "$value" == "{"* ]]; then
-          json="$(echo "$json" | jq --arg k "$key" --argjson v "$value" '. + {($k): $v}')"
+      
+      # Add input_path
+      json="$(echo "$json" | jq --arg path "${metadata[input_path]}" '. + {input_path: $path}')"
+      
+      # Add title as nested object
+      if [[ -n "${metadata[title]}" ]]; then
+        json="$(echo "$json" | jq --arg title "${metadata[title]}" '. + {title: {main: $title}}')"
+      fi
+      
+      # Add author as nested object (split if possible)
+      if [[ -n "${metadata[author]}" ]]; then
+        local author="${metadata[author]}"
+        if [[ $author =~ ^([^,]+),\s*([^,]+)$ ]]; then
+          local last_name="${BASH_REMATCH[1]}"
+          local first_name="${BASH_REMATCH[2]}"
+          json="$(echo "$json" | jq --arg last "$last_name" --arg first "$first_name" '. + {author: {last: $last, first: $first}}')"
         else
-          json="$(echo "$json" | jq --arg k "$key" --arg v "$value" '. + {($k): $v}')"
+          # Try to split on spaces and assume last word is last name
+          local last_name=$(echo "$author" | rev | cut -d' ' -f1 | rev)
+          local first_name=$(echo "$author" | sed "s/$last_name$//" | sed 's/ $//')
+          json="$(echo "$json" | jq --arg last "$last_name" --arg first "$first_name" '. + {author: {last: $last, first: $first}}')"
         fi
-      done
+      fi
+      
+      # Add other fields
+      if [[ -n "${metadata[narrator]}" ]]; then
+        json="$(echo "$json" | jq --arg narrator "${metadata[narrator]}" '. + {narrator: $narrator}')"
+      fi
+      
+      if [[ -n "${metadata[year]}" ]]; then
+        json="$(echo "$json" | jq --arg year "${metadata[year]}" '. + {year: $year}')"
+      fi
+      
+      # Use embedded fields if available, fall back to regular fields
+      local publisher=""
+      publisher=$(safe_array_get metadata embedded_publisher)
+      if [[ -z "$publisher" ]]; then
+        publisher=$(safe_array_get metadata publisher)
+      fi
+      if [[ -n "$publisher" ]]; then
+        json="$(echo "$json" | jq --arg publisher "$publisher" '. + {publisher: $publisher}')"
+      fi
+      
+      local genre=""
+      genre=$(safe_array_get metadata embedded_genre)
+      if [[ -z "$genre" ]]; then
+        genre=$(safe_array_get metadata genre)
+      fi
+      if [[ -n "$genre" ]]; then
+        json="$(echo "$json" | jq --arg genre "$genre" '. + {genre: $genre}')"
+      fi
+      
+      # Add series info if available
+      local series=""
+      series=$(safe_array_get metadata series)
+      if [[ -n "$series" ]]; then
+        json="$(echo "$json" | jq --arg series "$series" '. + {series: {name: $series}}')"
+        local series_index=""
+        series_index=$(safe_array_get metadata series_index)
+        if [[ -n "$series_index" ]]; then
+          json="$(echo "$json" | jq --arg index "$series_index" '.series.index = $index')"
+        fi
+      else
+        json="$(echo "$json" | jq '. + {series: null}')"
+      fi
+      
       # Write as single-line JSONL (compact, not pretty-printed)
       echo "$json" | jq -c . >> "$AI_JSONL"
       
