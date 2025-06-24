@@ -352,7 +352,7 @@ if [ $organizer_exit_code -eq 0 ]; then
     log_info "✅ Test run completed successfully"
 else
     log_error "❌ Test run failed"
-    exit 1
+  exit 1
 fi
 
 log_info "🏁 END run_all_tests.sh"
