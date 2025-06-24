@@ -333,16 +333,16 @@ if [ "$TRACE" = true ]; then
     TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} >> "$TRACE_LOG" 2>&1
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} >> "$TRACE_LOG" 2>&1
     fi
     organizer_exit_code=$?
 else
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} >> "$LOG_FILE" 2>&1
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} >> "$LOG_FILE" 2>&1
     fi
     organizer_exit_code=$?
 fi

@@ -861,10 +861,12 @@ fi
 
 # Call handle_manual_intervention at the start of main execution
 handle_manual_intervention
+pause  # Pause after manual intervention for review
 
 if [ "$DRY_RUN" = false ]; then
     # Process AI responses and organize files
     log_info "Processing AI responses and organizing files..."
+    pause  # Pause before processing AI responses for manual intervention
     process_all_ai_responses "$INPUT_PATH" "$OUTPUT_PATH"
     log_info "File organization completed successfully"
 fi
