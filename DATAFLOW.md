@@ -143,3 +143,22 @@ graph TD
 - Key steps: Metadata extraction → AI analysis → File organization
 
 **Note:** The test harness (run_all_tests.sh) must be run from the project root as './tests/run_all_tests.sh' for correct operation. Running from any other directory may cause errors or incorrect test data placement.
+
+## AI Bundle Format Requirements
+
+- The AI bundle (`ai_input.jsonl`) **must** be in valid JSONL format: one single-line JSON object per line.
+- Do **not** use pretty-printed or multi-line JSON.
+- The `input_path` field should use only the minimal folder path (e.g., `"Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}"`), not absolute or test harness paths.
+
+## Troubleshooting AI Bundle Issues
+
+- If `ai_input.jsonl` is overwritten with pretty-printed JSON, check for post-processing steps or scripts that may be modifying the file after test data generation. The file must remain single-line JSONL.
+
+## Automatic Verification Step
+
+After generating the simulated AI bundle, the test harness automatically checks that:
+- Every line in `ai_input.jsonl` is valid single-line JSON.
+- The number of valid lines matches the number of lines in the file.
+- No `input_path` contains absolute or test harness paths.
+
+If any issues are detected, a warning is printed in the test log.

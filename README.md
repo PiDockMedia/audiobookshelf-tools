@@ -182,7 +182,23 @@ MIT License - see LICENSE file for details
       description.txt
 ```
 
-## Troubleshooting
+## AI Bundle Format Requirements
+
+- The AI bundle (`ai_input.jsonl`) **must** be in valid JSONL format: one single-line JSON object per line.
+- Do **not** use pretty-printed or multi-line JSON.
+- The `input_path` field should use only the minimal folder path (e.g., `"Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}"`), not absolute or test harness paths.
+
+## Troubleshooting AI Bundle Issues
 
 - If you see FFmpeg errors about 'Unable to choose an output format for ... .tmp', ensure the temp file extension preserves the original audio extension (e.g., .tmp.m4b) so FFmpeg can infer the format.
-- If you see many jq parse errors or 'Source directory not found' during test runs, ensure the AI bundle (ai_input.jsonl) is present, valid, and matches the generated test data. The test harness now auto-generates a simulated bundle after test data generation.
+- If you see many jq parse errors or 'Source directory not found' during test runs, ensure the AI bundle (`ai_input.jsonl`) is present, valid, and matches the generated test data. The test harness now auto-generates a simulated bundle after test data generation.
+- If `ai_input.jsonl` is overwritten with pretty-printed JSON, check for post-processing steps or scripts that may be modifying the file after test data generation. The file must remain single-line JSONL.
+
+## Automatic Verification Step
+
+After generating the simulated AI bundle, the test harness automatically checks that:
+- Every line in `ai_input.jsonl` is valid single-line JSON.
+- The number of valid lines matches the number of lines in the file.
+- No `input_path` contains absolute or test harness paths.
+
+If any issues are detected, a warning is printed in the test log.

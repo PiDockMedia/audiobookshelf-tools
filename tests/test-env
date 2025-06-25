@@ -3,6 +3,7 @@ INPUT_PATH=./tests/test-audiobooks/input
 OUTPUT_PATH=./tests/test-audiobooks/output
 CONFIG_PATH=./tests/test-audiobooks/config
 LOG_LEVEL=debug
+DEBUG=true
 TRACKING_MODE=JSON
 INCLUDE_EXTRAS=true
 DUPLICATE_POLICY=versioned

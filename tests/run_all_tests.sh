@@ -49,6 +49,9 @@
 #
 # === End Test Harness Dataflow & Logic ===
 
+# === Always start with a clean slate ===
+clear
+
 # === Configuration ===
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTDIR="${ROOT_DIR}/tests/test-audiobooks"
@@ -57,15 +60,23 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/test_run_$(date +%Y-%m-%d_%H%M%S).log"
 TEST_ENV="${ROOT_DIR}/tests/test-env"
 
-# Default values
-CLEAN=false
-GENERATE=true
-WITH_TTS=false
-DRY_RUN=false
-PAUSE=false
-DEBUG=false
-TRACE=false
-SIMULATE_AI=true
+# === Load Environment First ===
+if [[ -f "${TEST_ENV}" ]]; then
+    echo "[INFO] Loading test-env: ${TEST_ENV}"
+    source "${TEST_ENV}"
+else
+    echo "[INFO] No test-env found, using defaults"
+fi
+
+# Default values (can be overridden by test-env or command line)
+CLEAN=${CLEAN:-false}
+GENERATE=${GENERATE:-true}
+WITH_TTS=${WITH_TTS:-false}
+DRY_RUN=${DRY_RUN:-false}
+PAUSE=${PAUSE:-false}
+DEBUG=${DEBUG:-false}
+TRACE=${TRACE:-false}
+SIMULATE_AI=${SIMULATE_AI:-true}
 
 # === Logging Functions ===
 log_info() {
@@ -282,6 +293,21 @@ generate_test_data() {
         echo '{"input_path": "Aesop/Aesop'\''s Fables", "title": {"main": "Aesop'\''s Fables"}, "author": {"first": "", "last": "Aesop"}, "narrator": "Various", "year": 1912, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Fable"}' >> "$ai_jsonl"
         echo '{"input_path": "Sun, Tzu/The Art of War/1910 - The Art of War {Lionel Giles}", "title": {"main": "The Art of War"}, "author": {"first": "Sun", "last": "Tzu"}, "narrator": "Lionel Giles", "year": 1910, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Philosophy"}' >> "$ai_jsonl"
         log_info "Simulated AI bundle (single-line JSONL) generated at $ai_jsonl"
+        # === Automatic verification of ai_input.jsonl format ===
+        local jsonl_lines total_lines valid_lines
+        total_lines=$(wc -l < "$ai_jsonl" | tr -d ' ')
+        valid_lines=$(jq -c . < "$ai_jsonl" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$total_lines" -ne "$valid_lines" ]; then
+            log_error "ai_input.jsonl format error: $((total_lines-valid_lines)) line(s) are not valid single-line JSON."
+            log_error "Check for pretty-printed or malformed JSON. Each line must be a single-line JSON object."
+        fi
+        # Check for absolute/test harness paths in input_path
+        if grep -q '"input_path": "/' "$ai_jsonl"; then
+            log_error "ai_input.jsonl privacy error: Detected absolute path in input_path. Use only minimal folder path."
+        fi
+        if grep -q 'test-audiobooks' "$ai_jsonl"; then
+            log_error "ai_input.jsonl privacy error: Detected test harness path in input_path. Use only minimal folder path."
+        fi
     else
         log_info "Skipping AI response generation (--nosimulate flag used)"
     fi
@@ -315,14 +341,6 @@ if [ "$GENERATE" = true ]; then
     pause  # Pause after test data generation for inspection
 fi
 
-# === Load Environment ===
-if [[ -f "${TEST_ENV}" ]]; then
-    log_info "Using test-env: ${TEST_ENV}"
-    source "${TEST_ENV}"
-else
-    log_info "No test-env found, using defaults"
-fi
-
 # Pause before running organizer (allows for AI response injection)
 pause  # Pause before organization step for AI response injection
 
@@ -333,18 +351,18 @@ if [ "$TRACE" = true ]; then
     TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} >> "$TRACE_LOG" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
     fi
-    organizer_exit_code=$?
+    organizer_exit_code=${PIPESTATUS[0]}
 else
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} >> "$LOG_FILE" 2>&1
+        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
     fi
-    organizer_exit_code=$?
+    organizer_exit_code=${PIPESTATUS[0]}
 fi
 
 # === Verify Results ===
