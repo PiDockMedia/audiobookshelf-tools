@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime
-from config import settings
+from config import INPUT_PATH, OUTPUT_PATH, DRY_RUN
 
 TRACKER_FILE = os.path.join(settings.CONFIG_PATH, "tracker.json")
 
