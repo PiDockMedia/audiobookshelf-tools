@@ -15,4 +15,3 @@ def scan_input_directory(input_dir: str) -> Iterator[str]:
             full_path = os.path.join(root, d)
             if has_audio_files(full_path):
                 yield full_path
-        break  # don't recurse
