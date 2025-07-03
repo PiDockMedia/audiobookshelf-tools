@@ -528,6 +528,15 @@ EOF
       echo "$json" | jq -c . >> "$AI_JSONL"
       
       DebugEcho "📚 Added ${id} to AI bundle with enhanced metadata and input_path: $rel_path"
+
+      # After determining rel_path for each book:
+      local book_id="$(echo "$rel_path" | md5sum | awk '{print $1}')"
+      local current_state="$(db_get_state "$book_id")"
+      if [[ -z "$current_state" ]]; then
+        db_set_state "$book_id" "$rel_path" "accepted"
+      fi
+      # When adding to AI input bundle:
+      db_set_state "$book_id" "$rel_path" "ready_for_ai"
     else
       DebugEcho "Skipping unsupported file: $entry"
     fi
@@ -538,10 +547,14 @@ EOF
 
 # === Pause function ===
 function pause() {
-  if [[ "$PAUSE" == "true" ]]; then
-    DebugEcho "⏸️  Pausing... Press Enter to continue..."
-    read -r
-  fi
+    if [ "$PAUSE" = true ]; then
+        local msg="$1"
+        if [ -z "$msg" ]; then
+            msg="Pausing for inspection. Press Enter to continue..."
+        fi
+        LogInfo "⏸️  PAUSE: $msg"
+        read -p ""
+    fi
 }
 
 # === CLI Argument Parsing ===
@@ -667,11 +680,23 @@ process_ai_response_and_organize() {
         return 1
     fi
     
+    # Robustly validate required fields
+    local author_type=$(echo "$metadata" | jq -r 'if (.author | type) == "object" then "object" else empty end')
+    local author_last_type=$(echo "$metadata" | jq -r 'if (.author.last | type) == "string" then "string" else empty end')
+    local author_first_type=$(echo "$metadata" | jq -r 'if (.author.first | type) == "string" then "string" else empty end')
+    local title_type=$(echo "$metadata" | jq -r 'if (.title | type) == "object" then "object" else empty end')
+    local title_main_type=$(echo "$metadata" | jq -r 'if (.title.main | type) == "string" then "string" else empty end')
+    
+    if [ "$author_type" != "object" ] || [ "$author_last_type" != "string" ] || [ "$author_first_type" != "string" ] || [ "$title_type" != "object" ] || [ "$title_main_type" != "string" ]; then
+        log_error "Missing or invalid required fields (author/title) in AI response: $ai_response_file"
+        return 1
+    fi
+    
     # Extract required fields
     local author=$(echo "$metadata" | jq -r '.author.last + ", " + .author.first')
     local title=$(echo "$metadata" | jq -r '.title.main')
     
-    # Validate required fields
+    # Validate required fields (redundant, but extra safe)
     if [ -z "$author" ] || [ "$author" = "null" ] || [ -z "$title" ] || [ "$title" = "null" ]; then
         log_error "Missing required fields (author/title) in AI response: $ai_response_file"
         return 1
@@ -715,14 +740,50 @@ process_all_ai_responses() {
     local processed_count=0
     local error_count=0
     local found_any_responses=false
+    local manual_intervention_count=0
     
-    # Process JSONL file if it exists
-    local jsonl_file="$ai_bundles_dir/pending/ai_input.jsonl"
-    if [ -f "$jsonl_file" ]; then
+    # Process AI response JSONL file if it exists
+    local ai_response_jsonl="$ai_bundles_dir/pending/ai_response.jsonl"
+    if [ -f "$ai_response_jsonl" ]; then
         found_any_responses=true
-        log_debug "Processing JSONL file: $jsonl_file"
+        log_debug "Processing AI response file: $ai_response_jsonl"
+        
+        # Create manual intervention file if it doesn't exist
+        local manual_jsonl="$ai_bundles_dir/pending/manual_intervention.jsonl"
+        touch "$manual_jsonl"
+        
         while IFS= read -r line; do
-            # Create temporary response file
+            # Skip empty lines
+            if [ -z "$line" ]; then
+                continue
+            fi
+            
+            # Check if this is a failed AI response that should go to manual intervention
+            local status=$(echo "$line" | jq -r '.status // "ai_returned"')
+            if [ "$status" = "ai_failed" ]; then
+                log_debug "Moving failed AI response to manual intervention: $input_path_val"
+                echo "$line" >> "$manual_jsonl"
+                db_set_state "$book_id" "$input_path_val" "ai_failed"
+                ((manual_intervention_count++))
+                continue
+            fi
+            
+            # Check confidence levels for critical fields
+            local author_confidence=$(echo "$line" | jq -r '.confidence.author // "high"')
+            local title_confidence=$(echo "$line" | jq -r '.confidence.title // "high"')
+            local series_confidence=$(echo "$line" | jq -r '.confidence.series // "high"')
+            local series_index_confidence=$(echo "$line" | jq -r '.confidence.series_index // "high"')
+            
+            # If any critical field has low confidence, move to manual intervention
+            if [ "$author_confidence" = "low" ] || [ "$title_confidence" = "low" ] || [ "$series_confidence" = "low" ] || [ "$series_index_confidence" = "low" ]; then
+                log_debug "Moving low-confidence response to manual intervention: $input_path_val"
+                echo "$line" | jq '. + {status: "ai_failed"}' >> "$manual_jsonl"
+                db_set_state "$book_id" "$input_path_val" "ai_failed"
+                ((manual_intervention_count++))
+                continue
+            fi
+            
+            # Create temporary response file for processing
             local temp_response=$(mktemp)
             echo "$line" > "$temp_response"
             
@@ -731,8 +792,10 @@ process_all_ai_responses() {
             local full_source_dir="$input_path/$source_dir"
             if [ -d "$full_source_dir" ]; then
                 if process_ai_response_and_organize "$temp_response" "$full_source_dir" "$output_path"; then
+                    db_set_state "$book_id" "$input_path_val" "organized"
                     ((processed_count++))
                 else
+                    db_set_state "$book_id" "$input_path_val" "ai_returned"
                     ((error_count++))
                 fi
             else
@@ -742,10 +805,10 @@ process_all_ai_responses() {
             
             # Clean up temporary file
             rm -f "$temp_response"
-        done < "$jsonl_file"
+        done < "$ai_response_jsonl"
     fi
     
-    # Process individual JSON files if they exist
+    # Process individual JSON files if they exist (legacy support)
     while IFS= read -r -d '' response_file; do
         found_any_responses=true
         # Get corresponding source directory
@@ -770,6 +833,9 @@ process_all_ai_responses() {
     fi
     
     log_info "Processed $processed_count books successfully"
+    if [ $manual_intervention_count -gt 0 ]; then
+        log_info "Moved $manual_intervention_count books to manual intervention for review"
+    fi
     if [ $error_count -gt 0 ]; then
         log_warn "Encountered $error_count errors during processing"
     fi
@@ -781,7 +847,7 @@ process_all_ai_responses() {
 # Move failed AI entries to manual_intervention.jsonl and resubmit improved entries
 handle_manual_intervention() {
   local ai_bundles_dir="$INPUT_PATH/ai_bundles/pending"
-  local ai_response_jsonl="$ai_bundles_dir/ai_input.jsonl"
+  local ai_response_jsonl="$ai_bundles_dir/ai_response.jsonl"
   local manual_jsonl="$ai_bundles_dir/manual_intervention.jsonl"
   local tmp_jsonl
 
@@ -803,9 +869,11 @@ handle_manual_intervention() {
       continue
     fi
     # Only process lines that have the expected status field
+    local input_path_val=$(echo "$line" | jq -r '.input_path')
+    local book_id=$(echo "$input_path_val" | md5sum | awk '{print $1}')
     if echo "$line" | jq -e '.status == "ai_failed"' >/dev/null 2>&1; then
       echo "$line" >> "$manual_jsonl"
-      # Optionally update DB status here if needed
+      db_set_state "$book_id" "$input_path_val" "ai_failed"
     else
       echo "$line" >> "$tmp_jsonl"
     fi
@@ -822,16 +890,38 @@ handle_manual_intervention() {
         continue
       fi
       # Only process lines that have the expected manual_status field
+      local input_path_val=$(echo "$line" | jq -r '.input_path')
+      local book_id=$(echo "$input_path_val" | md5sum | awk '{print $1}')
       if echo "$line" | jq -e '.manual_status == "ready"' >/dev/null 2>&1; then
-        # Remove manual_status field before resubmitting
-        echo "$line" | jq 'del(.manual_status)' >> "$ai_response_jsonl"
-        # Optionally update DB status here if needed
+        echo "$line" | jq 'del(.manual_status) | . + {status: "ai_returned"}' >> "$ai_response_jsonl"
+        db_set_state "$book_id" "$input_path_val" "ready_for_ai"
       else
         echo "$line" >> "$tmp_jsonl"
       fi
     done < "$manual_jsonl"
     mv "$tmp_jsonl" "$manual_jsonl"
   fi
+}
+
+# === Database State Tracking Functions ===
+# Insert or update a book's state in the DB
+function db_set_state() {
+  local id="$1"
+  local path="$2"
+  local state="$3"
+  local now
+  now="$(date '+%Y-%m-%d %H:%M:%S')"
+  sqlite3 "$TRACKING_DB_PATH" "INSERT INTO books (id, path, state, updated_at) VALUES ('$id', '$path', '$state', '$now') ON CONFLICT(id) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at;"
+}
+# Get a book's state from the DB
+function db_get_state() {
+  local id="$1"
+  sqlite3 "$TRACKING_DB_PATH" "SELECT state FROM books WHERE id='$id';"
+}
+# Remove a book from the DB
+function db_remove_book() {
+  local id="$1"
+  sqlite3 "$TRACKING_DB_PATH" "DELETE FROM books WHERE id='$id';"
 }
 
 # === Main Execution ===
@@ -847,27 +937,36 @@ setup_logging
 
 DebugEcho "Initializing database..."
 init_db
-pause
+pause "After database initialization. Inspect DB if needed."
 
 DebugEcho "Starting main scan loop..."
+DebugEcho "⏸️  PAUSE: About to scan input directory and create AI input bundle..."
+pause "Before scanning input. Inspect input folder if needed."
 scan_input_and_prepare_ai_bundles
-pause
+DebugEcho "⏸️  PAUSE: AI input bundle created. Ready for AI processing..."
+pause "After creating AI input bundle. Inspect ai_input.jsonl and prompt.md if needed."
 
 if [[ "${INGEST_MODE:-false}" == "true" ]]; then
   DebugEcho "Starting metadata ingestion..."
   ingest_metadata_file "${INGEST_FILE:-}"
-  pause
+  pause  # Pause after metadata ingestion
 fi
 
 # Call handle_manual_intervention at the start of main execution
+DebugEcho "⏸️  PAUSE: About to process manual intervention entries..."
+pause "Before manual intervention processing. Inspect manual_intervention.jsonl if needed."
 handle_manual_intervention
-pause  # Pause after manual intervention for review
+DebugEcho "⏸️  PAUSE: Manual intervention processing complete..."
+pause "After manual intervention processing. Inspect manual_intervention.jsonl if needed."
 
 if [ "$DRY_RUN" = false ]; then
     # Process AI responses and organize files
+    DebugEcho "⏸️  PAUSE: About to process AI responses and organize files..."
+    pause "Before processing AI responses and organizing files. Inspect ai_response.jsonl if needed."
     log_info "Processing AI responses and organizing files..."
-    pause  # Pause before processing AI responses for manual intervention
     process_all_ai_responses "$INPUT_PATH" "$OUTPUT_PATH"
+    DebugEcho "⏸️  PAUSE: File organization complete..."
+    pause "After organization step. Inspect output folder and logs if needed."
     log_info "File organization completed successfully"
 fi
 

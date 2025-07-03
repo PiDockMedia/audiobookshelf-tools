@@ -171,6 +171,20 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
+# === Ensure Bash 4+ for associative arrays and modern features ===
+if [ -z "$BASH_VERSION" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    echo "[INFO] Detected bash version: ${BASH_VERSION:-unknown}. Sourcing ~/.bashrc to update environment..."
+    # shellcheck source=/dev/null
+    source ~/.bashrc
+    # Re-exec the script with the new environment if still not bash 4+
+    if [ -z "$BASH_VERSION" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+        echo "[ERROR] Bash version is still too low after sourcing ~/.bashrc. Please ensure Homebrew bash is installed and in your PATH."
+        exit 1
+    else
+        echo "[INFO] Bash version after sourcing: $BASH_VERSION"
+    fi
+fi
+
 # === Test Data Generation Functions ===
 gen_tts_audio() {
     local base="$1"
@@ -279,37 +293,50 @@ generate_test_data() {
         "The Art of War" "Sun Tzu" "Sun Tzu" "Lionel Giles" "LibriVox" "1910" "Philosophy" "Test comment" "The Art of War" "" ""
     
     log_info "Test data generated successfully in ${OUTDIR}"
+}
+
+# === Simulate AI Response Generation ===
+simulate_ai_response() {
+    log_info "Simulating AI response generation..."
     
-    # Generate simulated AI responses if enabled
-    if [ "$SIMULATE_AI" = true ]; then
-        # === Force overwrite a valid simulated AI bundle for test data (single-line JSONL) ===
-        local ai_bundle_dir="${OUTDIR}/input/ai_bundles/pending"
-        mkdir -p "$ai_bundle_dir"
-        local ai_jsonl="$ai_bundle_dir/ai_input.jsonl"
-        : > "$ai_jsonl"
-        echo '{"input_path": "Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}", "title": {"main": "Pride and Prejudice"}, "author": {"first": "Jane", "last": "Austen"}, "narrator": "Elizabeth Klett", "year": 1813, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Novel"}' >> "$ai_jsonl"
-        echo '{"input_path": "Doyle, Arthur Conan/Sherlock Holmes/Book 1 - 1892 - The Adventures of Sherlock Holmes {David Clarke}", "title": {"main": "The Adventures of Sherlock Holmes"}, "author": {"first": "Arthur Conan", "last": "Doyle"}, "narrator": "David Clarke", "year": 1892, "series": {"name": "Sherlock Holmes"}, "series_index": 1, "publisher": "LibriVox", "genre": "Detective"}' >> "$ai_jsonl"
-        echo '{"input_path": "Melville, Herman/1851 - Moby Dick {Stewart Wills}/Disc 1", "title": {"main": "Moby Dick"}, "author": {"first": "Herman", "last": "Melville"}, "narrator": "Stewart Wills", "year": 1851, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Adventure"}' >> "$ai_jsonl"
-        echo '{"input_path": "Aesop/Aesop'\''s Fables", "title": {"main": "Aesop'\''s Fables"}, "author": {"first": "", "last": "Aesop"}, "narrator": "Various", "year": 1912, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Fable"}' >> "$ai_jsonl"
-        echo '{"input_path": "Sun, Tzu/The Art of War/1910 - The Art of War {Lionel Giles}", "title": {"main": "The Art of War"}, "author": {"first": "Sun", "last": "Tzu"}, "narrator": "Lionel Giles", "year": 1910, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Philosophy"}' >> "$ai_jsonl"
-        log_info "Simulated AI bundle (single-line JSONL) generated at $ai_jsonl"
-        # === Automatic verification of ai_input.jsonl format ===
-        local jsonl_lines total_lines valid_lines
-        total_lines=$(wc -l < "$ai_jsonl" | tr -d ' ')
-        valid_lines=$(jq -c . < "$ai_jsonl" 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$total_lines" -ne "$valid_lines" ]; then
-            log_error "ai_input.jsonl format error: $((total_lines-valid_lines)) line(s) are not valid single-line JSON."
-            log_error "Check for pretty-printed or malformed JSON. Each line must be a single-line JSON object."
-        fi
-        # Check for absolute/test harness paths in input_path
-        if grep -q '"input_path": "/' "$ai_jsonl"; then
-            log_error "ai_input.jsonl privacy error: Detected absolute path in input_path. Use only minimal folder path."
-        fi
-        if grep -q 'test-audiobooks' "$ai_jsonl"; then
-            log_error "ai_input.jsonl privacy error: Detected test harness path in input_path. Use only minimal folder path."
-        fi
-    else
-        log_info "Skipping AI response generation (--nosimulate flag used)"
+    local ai_bundle_dir="${OUTDIR}/input/ai_bundles/pending"
+    mkdir -p "$ai_bundle_dir"
+    
+    # Create simulated AI response file (this is what the AI would return after analyzing ai_input.jsonl)
+    local ai_response_jsonl="$ai_bundle_dir/ai_response.jsonl"
+    : > "$ai_response_jsonl"
+    
+    # Simulate AI responses with confidence levels
+    # High confidence books (will be organized)
+    echo '{"input_path": "Austen, Jane/1813 - Pride and Prejudice {Elizabeth Klett}", "title": {"main": "Pride and Prejudice"}, "author": {"first": "Jane", "last": "Austen"}, "narrator": "Elizabeth Klett", "year": 1813, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Novel", "confidence": {"author": "high", "title": "high", "series": "high", "series_index": "high"}, "status": "ai_returned"}' >> "$ai_response_jsonl"
+    
+    echo '{"input_path": "Doyle, Arthur Conan/Sherlock Holmes/Book 1 - 1892 - The Adventures of Sherlock Holmes {David Clarke}", "title": {"main": "The Adventures of Sherlock Holmes"}, "author": {"first": "Arthur Conan", "last": "Doyle"}, "narrator": "David Clarke", "year": 1892, "series": {"name": "Sherlock Holmes"}, "series_index": 1, "publisher": "LibriVox", "genre": "Detective", "confidence": {"author": "high", "title": "high", "series": "high", "series_index": "high"}, "status": "ai_returned"}' >> "$ai_response_jsonl"
+    
+    echo '{"input_path": "Melville, Herman/1851 - Moby Dick {Stewart Wills}", "title": {"main": "Moby Dick"}, "author": {"first": "Herman", "last": "Melville"}, "narrator": "Stewart Wills", "year": 1851, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Adventure", "confidence": {"author": "high", "title": "high", "series": "high", "series_index": "high"}, "status": "ai_returned"}' >> "$ai_response_jsonl"
+    
+    # Medium confidence book (will be organized but with warning)
+    echo '{"input_path": "Sun, Tzu/The Art of War/1910 - The Art of War {Lionel Giles}", "title": {"main": "The Art of War"}, "author": {"first": "Sun", "last": "Tzu"}, "narrator": "Lionel Giles", "year": 1910, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Philosophy", "confidence": {"author": "medium", "title": "high", "series": "high", "series_index": "high"}, "status": "ai_returned"}' >> "$ai_response_jsonl"
+    
+    # Low confidence book (will be moved to manual intervention)
+    echo '{"input_path": "Aesop/Aesop'\''s Fables", "title": {"main": "Aesop'\''s Fables"}, "author": {"first": "", "last": "Aesop"}, "narrator": "Various", "year": 1912, "series": null, "series_index": null, "publisher": "LibriVox", "genre": "Fable", "confidence": {"author": "low", "title": "medium", "series": "high", "series_index": "high"}, "status": "ai_failed"}' >> "$ai_response_jsonl"
+    
+    log_info "Simulated AI response file generated at $ai_response_jsonl"
+    
+    # Verify AI response format
+    local jsonl_lines total_lines valid_lines
+    total_lines=$(wc -l < "$ai_response_jsonl" | tr -d ' ')
+    valid_lines=$(jq -c . < "$ai_response_jsonl" 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$total_lines" -ne "$valid_lines" ]; then
+        log_error "ai_response.jsonl format error: $((total_lines-valid_lines)) line(s) are not valid single-line JSON."
+        log_error "Check for pretty-printed or malformed JSON. Each line must be a single-line JSON object."
+    fi
+    
+    # Check for absolute/test harness paths in input_path
+    if grep -q '"input_path": "/' "$ai_response_jsonl"; then
+        log_error "ai_response.jsonl privacy error: Detected absolute path in input_path. Use only minimal folder path."
+    fi
+    if grep -q 'test-audiobooks' "$ai_response_jsonl"; then
+        log_error "ai_response.jsonl privacy error: Detected test harness path in input_path. Use only minimal folder path."
     fi
 }
 
@@ -338,31 +365,65 @@ fi
 if [ "$GENERATE" = true ]; then
     log_info "Generating test data..."
     generate_test_data
-    pause  # Pause after test data generation for inspection
+    log_info "⏸️  PAUSE: Test data generated. Inspect input folders if desired. Press Enter to continue..."
+    pause
 fi
 
-# Pause before running organizer (allows for AI response injection)
-pause  # Pause before organization step for AI response injection
+log_info "⏸️  PAUSE: About to run organizer for initial scan and AI input bundle creation. Press Enter to continue..."
+pause
 
-# === Run Tests ===
-log_info "Running organize_audiobooks.sh..."
+log_info "Running organize_audiobooks.sh for initial scan and AI input bundle creation..."
 
 if [ "$TRACE" = true ]; then
-    TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S).log"
+    TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S)_org1.log"
     log_info "Tracing organizer to $TRACE_LOG"
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
     fi
     organizer_exit_code=${PIPESTATUS[0]}
 else
     if [ "$DRY_RUN" = true ]; then
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
     else
-        bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
+        /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
     fi
     organizer_exit_code=${PIPESTATUS[0]}
+fi
+
+# === Simulate AI Response After Organizer Creates Input Bundle ===
+if [ "$SIMULATE_AI" = true ] && [ $organizer_exit_code -eq 0 ]; then
+    log_info "⏸️  PAUSE: Organizer created AI input bundle. About to simulate AI response. Press Enter to continue..."
+    pause
+    
+    simulate_ai_response
+    log_info "⏸️  PAUSE: AI response simulated. Inspect ai_response.jsonl if desired. Press Enter to continue..."
+    pause
+    
+    log_info "⏸️  PAUSE: About to run organizer for organization step using AI response. Press Enter to continue..."
+    pause
+    
+    log_info "Running organize_audiobooks.sh for organization step using AI response..."
+    if [ "$TRACE" = true ]; then
+        TRACE_LOG="$LOG_DIR/test_run_TRACE_$(date +%Y-%m-%d_%H%M%S)_org2.log"
+        log_info "Tracing organizer to $TRACE_LOG (second run)"
+        if [ "$DRY_RUN" = true ]; then
+            /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
+        else
+            /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee "$TRACE_LOG"
+        fi
+        organizer_exit_code2=${PIPESTATUS[0]}
+    else
+        if [ "$DRY_RUN" = true ]; then
+            /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" --dry-run ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
+        else
+            /opt/homebrew/bin/bash "${ROOT_DIR}/organize_audiobooks.sh" --input="$OUTDIR/input" --output="$OUTDIR/output" ${PAUSE:+--pause} 2>&1 | tee -a "$LOG_FILE"
+        fi
+        organizer_exit_code2=${PIPESTATUS[0]}
+    fi
+    log_info "⏸️  PAUSE: Organizer finished organization step using AI response. Inspect output and logs if desired. Press Enter to continue..."
+    pause
 fi
 
 # === Verify Results ===
