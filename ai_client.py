@@ -1,24 +1,45 @@
+import os
+import requests
+import logging
+from config import AI_ENDPOINT, AI_MODEL
+
 def send_to_ai_and_get_metadata(scan_data: dict) -> dict:
     """
-    Accepts structured scan info and simulates AI enrichment.
+    Sends scan data and optional hints to AI for metadata extraction.
     """
-    # Just for test: if the folder looks like Discworld, add mock series metadata
-    if "Discworld" in scan_data["current_folder"] or any("Discworld" in f for f in scan_data["files"]):
-        return {
-            "author": {"first": "Terry", "last": "Pratchett"},
-            "title": {"main": scan_data["current_folder"]},
-            "series": "Discworld",
-            "series_sequence": 24,
-            "publish_year": 1998,
-            "narrator": "Stephen Briggs",
-            "confidence": {"title": "high"}
-        }
+    hint_path = os.path.join(scan_data["full_path"], "metadata_hint.txt")
+    hint_text = ""
+    if os.path.exists(hint_path):
+        with open(hint_path, "r", encoding="utf-8") as f:
+            hint_text = f.read().strip()
 
-    # Otherwise, return a generic standalone book metadata
-    return {
-        "author": {"first": "Unknown", "last": "Author"},
-        "title": {"main": scan_data["current_folder"]},
-        "publish_year": 2024,
-        "narrator": "Unknown Narrator",
-        "confidence": {"title": "low"}
-    }
+    # Compose prompt
+    prompt = f"""
+You are a metadata extraction agent. Given folder and file names, extract:
+- Title
+- Author (first and last)
+- Narrator
+- Series and number
+- Year
+
+Raw structure:
+{scan_data['relative_path']}
+Files:
+{scan_data['files']}
+{f"\nHint:\n{hint_text}" if hint_text else ""}
+
+Respond in JSON.
+"""
+
+    try:
+        response = requests.post(
+            AI_ENDPOINT,
+            json={"model": AI_MODEL, "prompt": prompt, "stream": False},
+            timeout=30
+        )
+        response.raise_for_status()
+        text = response.json().get("response") or response.text
+        return eval(text) if "{" in text else {}
+    except Exception as e:
+        logging.warning(f"AI request failed: {e}")
+        return {}
