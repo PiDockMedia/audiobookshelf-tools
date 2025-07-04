@@ -15,14 +15,18 @@ def main():
 
     for book in scan_input_directory(INPUT_PATH):
         relpath = book["relative_path"]
+        full_path = book["full_path"]
+        force_override = os.path.exists(os.path.join(full_path, ".force_process"))
         status = get_status(tracker, relpath)
 
-        if status == "processed":
+        if not force_override and status == "processed":
             logger.info(f"Already processed, skipping: {relpath}")
             continue
-        elif status == "skipped":
+        elif not force_override and status == "skipped":
             logger.info(f"Previously skipped, skipping: {relpath}")
             continue
+
+        status = get_status(tracker, relpath)
 
         logger.info(f"Processing: {relpath}")
         ai_metadata = send_to_ai_and_get_metadata(book)
@@ -33,11 +37,11 @@ def main():
             continue
 
         confidence = ai_metadata.get("confidence", {}).get("title", "low")
-        if confidence not in ("high", "very_high"):
+        if not force_override and confidence not in ("high", "very_high"):
             logger.warning(f"Low confidence for {relpath}, skipping")
             mark_status(tracker, relpath, "skipped", {"ai_confidence": confidence})
             continue
-
+            
         if DRY_RUN:
             logger.info(f"[Dry Run] Would organize: {relpath} -> {ai_metadata}")
         else:
