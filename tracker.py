@@ -1,9 +1,9 @@
 import os
 import json
 from datetime import datetime
-from config import INPUT_PATH, OUTPUT_PATH, DRY_RUN
+from config import CONFIG_PATH
 
-TRACKER_FILE = os.path.join(settings.CONFIG_PATH, "tracker.json")
+TRACKER_FILE = os.path.join(CONFIG_PATH, "tracker.json")
 
 def load_tracker() -> dict:
     if not os.path.exists(TRACKER_FILE):
@@ -12,7 +12,7 @@ def load_tracker() -> dict:
         return json.load(f)
 
 def save_tracker(tracker: dict) -> None:
-    os.makedirs(settings.CONFIG_PATH, exist_ok=True)
+    os.makedirs(CONFIG_PATH, exist_ok=True)
     with open(TRACKER_FILE, "w", encoding="utf-8") as f:
         json.dump(tracker, f, indent=2)
 
